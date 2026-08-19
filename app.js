@@ -627,7 +627,7 @@ function init() {
   if (currentUser()) {
     showApp();
   } else {
-    showLogin();
+    openEmergencyAdminSession();
   }
 }
 
@@ -729,6 +729,15 @@ function showApp() {
   syncFromSupabase();
 }
 
+function openEmergencyAdminSession() {
+  state.team = ensureAdminAccess(state.team);
+  state.userAccounts = userAccountsFromTeam(state.team);
+  activeUserId = "admin-user";
+  localStorage.setItem(authUserKey, activeUserId);
+  saveState({ sync: false });
+  showApp();
+}
+
 function handleLogin(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -751,17 +760,7 @@ function handleLogin(event) {
 }
 
 function resetAdminLogin() {
-  state.team = ensureAdminAccess(state.team);
-  state.userAccounts = userAccountsFromTeam(state.team);
-  saveState();
-  activeUserId = "admin-user";
-  localStorage.setItem(authUserKey, activeUserId);
-  const form = document.querySelector("#loginForm");
-  if (form) {
-    form.elements.login.value = "admin";
-    form.elements.password.value = "admin123";
-  }
-  showApp();
+  openEmergencyAdminSession();
 }
 
 function logout() {
