@@ -705,13 +705,26 @@ async function fetchRemoteMeta() {
   return rows[0] || null;
 }
 
+async function readRemoteRows(table) {
+  const attempts = [
+    `${remoteTableUrl(table)}?select=*&order=updated_at.asc`,
+    `${remoteTableUrl(table)}?select=*`,
+    `${remoteTableUrl(table)}?select=id,data,updated_at`
+  ];
+  let lastError = "";
+  for (const url of attempts) {
+    const response = await supabaseRequest(url, {
+      headers: supabaseHeaders()
+    });
+    if (response.ok) return response.json();
+    lastError = await response.text().catch(() => "");
+  }
+  throw new Error(`Lecture ${table} impossible. Vérifiez le SQL Supabase. ${lastError}`);
+}
+
 async function fetchRemoteCollection(collection) {
   const table = supabaseConfig.tables[collection];
-  const response = await supabaseRequest(`${remoteTableUrl(table)}?select=*&order=updated_at.asc`, {
-    headers: supabaseHeaders()
-  });
-  if (!response.ok) throw new Error(`Lecture ${table} impossible (${response.status})`);
-  const rows = await response.json();
+  const rows = await readRemoteRows(table);
   return rows.map((row) => remoteRowToRecord(collection, row));
 }
 
