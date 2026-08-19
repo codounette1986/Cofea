@@ -1139,14 +1139,14 @@ function generateDailyTasks() {
   render();
 }
 function renderHarvests() {
-  const harvests = state.harvests.filter((harvest) => dateInPeriod(harvest.date, "harvests"));
+  const harvestRecords = state.harvests.filter((harvest) => dateInPeriod(harvest.date, "harvests"));
   document.querySelector("#harvestSummary").innerHTML = state.fields.map((field) => `
     <div class="summary-line">
       <span>${field.name}</span>
-      <strong>${harvestSummaryForField(field.name, harvests)}</strong>
+      <strong>${harvestSummaryForField(field.name, harvestRecords)}</strong>
     </div>
   `).join("");
-  document.querySelector("#harvestsTable").innerHTML = harvests.map((harvest) => `
+  document.querySelector("#harvestsTable").innerHTML = harvestRecords.map((harvest) => `
     <tr>
       <td>${harvest.date}</td>
       <td>${harvest.field}</td>
@@ -1312,10 +1312,10 @@ function lowStock() {
   return state.stock.filter((stock) => Number(stock.quantity) <= Number(stock.threshold));
 }
 
-function harvestSummaryForField(fieldName, sourceHarvests = state.harvests) {
-  const harvests = sourceHarvests.filter((harvest) => harvest.field === fieldName);
-  if (!harvests.length) return "0";
-  const totals = harvests.reduce((summary, harvest) => {
+function harvestSummaryForField(fieldName, sourceHarvests) {
+  const fieldHarvestRecords = (sourceHarvests || state.harvests || []).filter((harvest) => harvest.field === fieldName);
+  if (!fieldHarvestRecords.length) return "0";
+  const totals = fieldHarvestRecords.reduce((summary, harvest) => {
     summary[harvest.unit] = (summary[harvest.unit] || 0) + Number(harvest.quantity);
     return summary;
   }, {});
