@@ -1,4 +1,4 @@
-const cacheName = "agripilot-pwa-disabled-v69";
+const cacheName = "agripilot-pwa-disabled-v70";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());

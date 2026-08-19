@@ -1885,10 +1885,10 @@ function openPasswordModal() {
   document.querySelector("#passwordModal").showModal();
 }
 
-function handlePasswordSubmit(event) {
+async function handlePasswordSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const message = document.querySelector("#passwordMessage");
+  const submitButton = form.querySelector('button[value="default"]');
   const login = form.elements.login.value.trim();
   const currentPassword = form.elements.currentPassword.value;
   const newPassword = form.elements.newPassword.value;
@@ -1910,8 +1910,22 @@ function handlePasswordSubmit(event) {
   state.team = state.team.map((member) =>
     member.id === person.id ? { ...member, password: newPassword } : member
   );
-  saveState();
-  showPasswordMessage("Mot de passe mis à jour. Reconnectez-vous avec le nouveau mot de passe.", "success");
+  if (submitButton) submitButton.disabled = true;
+  showPasswordMessage("Mot de passe mis à jour localement. Synchronisation Supabase...", "success");
+  saveState({ sync: false });
+  if (!navigator.onLine || !supabaseEnabled()) {
+    showPasswordMessage("Mot de passe local mis à jour, mais Supabase n'est pas accessible maintenant.", "error");
+    if (submitButton) submitButton.disabled = false;
+    return;
+  }
+  try {
+    await pushRemoteState();
+    showPasswordMessage("Mot de passe mis à jour dans Supabase. Reconnectez-vous avec le nouveau mot de passe.", "success");
+  } catch (error) {
+    showPasswordMessage(`Mot de passe local mis à jour, mais Supabase n'a pas confirmé : ${error.message}`, "error");
+    if (submitButton) submitButton.disabled = false;
+    return;
+  }
   window.setTimeout(() => {
     form.reset();
     document.querySelector("#passwordModal").close();
