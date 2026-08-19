@@ -725,6 +725,7 @@ function bindEvents() {
   document.body.addEventListener("change", handlePeriodInput);
 
   document.querySelector("#loginForm").addEventListener("submit", handleLogin);
+  window.agriPilotLoginReady = true;
   document.querySelector("#quickTaskBtn").addEventListener("click", () => openModal("task"));
   document.querySelector("#logoutBtn").addEventListener("click", logout);
   document.querySelector("#recordForm").addEventListener("submit", handleFormSubmit);

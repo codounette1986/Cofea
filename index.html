@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=58" />
+    <link rel="manifest" href="./manifest.webmanifest?v=59" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=58" />
+    <link rel="stylesheet" href="./styles.css?v=59" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -18,7 +18,7 @@
       Chargement de l'application...
     </div>
         <section class="login-screen" id="loginScreen" aria-labelledby="loginTitle">
-      <form class="login-card" id="loginForm">
+      <form class="login-card" id="loginForm" action="./index.html" method="post" onsubmit="return false">
         <div class="brand">
           <img class="brand-logo" src="./icons/logo.svg" alt="" aria-hidden="true" />
           <div>
@@ -342,7 +342,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v58";
+        var refreshKey = "agripilot-cache-refresh-v59";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -361,10 +361,23 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./index.html?v=58");
+          window.location.replace("./index.html?v=59");
         });
       })();
     </script>
-    <script src="./app.js?v=58" type="module"></script>
+    <script>
+      window.agriPilotLoginReady = false;
+      document.addEventListener("submit", function (event) {
+        if (!event.target || event.target.id !== "loginForm") return;
+        event.preventDefault();
+        if (window.agriPilotLoginReady) return;
+        var message = document.querySelector("#loginMessage");
+        if (message) {
+          message.textContent = "Chargement de l'application en cours. Si ce message reste affiché, le fichier app.js ne se charge pas.";
+          message.className = "password-message error";
+        }
+      }, true);
+    </script>
+    <script src="./app.js?v=59" defer></script>
   </body>
 </html>
