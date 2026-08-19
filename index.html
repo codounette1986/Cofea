@@ -8,12 +8,15 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=57" />
+    <link rel="manifest" href="./manifest.webmanifest?v=58" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=57" />
+    <link rel="stylesheet" href="./styles.css?v=58" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
+    <div class="startup-banner" id="startupBanner">
+      Chargement de l'application...
+    </div>
         <section class="login-screen" id="loginScreen" aria-labelledby="loginTitle">
       <form class="login-card" id="loginForm">
         <div class="brand">
@@ -339,7 +342,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v57";
+        var refreshKey = "agripilot-cache-refresh-v58";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -358,10 +361,10 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./index.html?v=57");
+          window.location.replace("./index.html?v=58");
         });
       })();
     </script>
-    <script src="./app.js?v=57" type="module"></script>
+    <script src="./app.js?v=58" type="module"></script>
   </body>
 </html>

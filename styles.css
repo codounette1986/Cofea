@@ -27,6 +27,27 @@ button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 html, body { max-width: 100%; overflow-x: hidden; }
 
+.startup-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--field);
+  box-shadow: var(--shadow);
+  font-weight: 700;
+}
+body.app-ready .startup-banner { display: none; }
+.startup-banner.startup-error {
+  color: var(--danger);
+  border-color: #f0c9c3;
+  background: #fff7f5;
+}
+
 .login-screen {
   min-height: 100vh;
   display: grid;

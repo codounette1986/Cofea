@@ -22,6 +22,11 @@ const supabaseConfig = {
   }
 };
 
+function createId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 const starterState = {
   profiles: [
     { id: "admin-profile", name: "Admins", role: "Admin", note: "Accès complet à toute l'application." },
@@ -31,39 +36,39 @@ const starterState = {
     { id: "terrain-profile", name: "Équipe terrain", role: "Terrain", note: "Accès terrain. Finances et revenus masqués." }
   ],
   fields: [
-    { id: crypto.randomUUID(), name: "Serre 1", crop: "Poivrons", area: 0.6, stage: "Floraison", health: 84, mode: "Serre", update: "Plants vigoureux, floraison régulière. Surveiller l'humidité en fin de journée." },
-    { id: crypto.randomUUID(), name: "Serre 2", crop: "Piment", area: 0.4, stage: "Fructification", health: 78, mode: "Serre", update: "Quelques feuilles marquées, contrôle thrips à refaire après arrosage." },
-    { id: crypto.randomUUID(), name: "Plein champ Nord", crop: "Papayes", area: 2.8, stage: "Croissance", health: 88, mode: "Plein champ", update: "Bonne reprise après paillage, croissance homogène." },
-    { id: crypto.randomUUID(), name: "Plein champ Sud", crop: "Piment", area: 1.7, stage: "Reprise", health: 71, mode: "Plein champ", update: "Reprise correcte mais stress hydrique visible sur quelques lignes." }
+    { id: createId(), name: "Serre 1", crop: "Poivrons", area: 0.6, stage: "Floraison", health: 84, mode: "Serre", update: "Plants vigoureux, floraison régulière. Surveiller l'humidité en fin de journée." },
+    { id: createId(), name: "Serre 2", crop: "Piment", area: 0.4, stage: "Fructification", health: 78, mode: "Serre", update: "Quelques feuilles marquées, contrôle thrips à refaire après arrosage." },
+    { id: createId(), name: "Plein champ Nord", crop: "Papayes", area: 2.8, stage: "Croissance", health: 88, mode: "Plein champ", update: "Bonne reprise après paillage, croissance homogène." },
+    { id: createId(), name: "Plein champ Sud", crop: "Piment", area: 1.7, stage: "Reprise", health: 71, mode: "Plein champ", update: "Reprise correcte mais stress hydrique visible sur quelques lignes." }
   ],
   tasks: [
-    { id: crypto.randomUUID(), title: "Contrôle goutte-à-goutte", field: "Serre 1", owner: "Awa", due: "2026-08-18", status: "En cours" },
-    { id: crypto.randomUUID(), title: "Tuteurage des poivrons", field: "Serre 1", owner: "Mamadou", due: "2026-08-19", status: "À faire" },
-    { id: crypto.randomUUID(), title: "Surveillance thrips et acariens", field: "Serre 2", owner: "Ibrahima", due: "2026-08-17", status: "En retard" },
-    { id: crypto.randomUUID(), title: "Paillage papayers", field: "Plein champ Nord", owner: "Awa", due: "2026-08-22", status: "À faire" },
-    { id: crypto.randomUUID(), title: "Désherbage plein champ", field: "Plein champ Sud", owner: "Mamadou", due: "2026-08-20", status: "À faire" }
+    { id: createId(), title: "Contrôle goutte-à-goutte", field: "Serre 1", owner: "Awa", due: "2026-08-18", status: "En cours" },
+    { id: createId(), title: "Tuteurage des poivrons", field: "Serre 1", owner: "Mamadou", due: "2026-08-19", status: "À faire" },
+    { id: createId(), title: "Surveillance thrips et acariens", field: "Serre 2", owner: "Ibrahima", due: "2026-08-17", status: "En retard" },
+    { id: createId(), title: "Paillage papayers", field: "Plein champ Nord", owner: "Awa", due: "2026-08-22", status: "À faire" },
+    { id: createId(), title: "Désherbage plein champ", field: "Plein champ Sud", owner: "Mamadou", due: "2026-08-20", status: "À faire" }
   ],
   harvests: [
-    { id: crypto.randomUUID(), date: "2026-08-10", field: "Serre 2", crop: "Piment", quantity: 64, unit: "kg", quality: "Très bonne", destination: "Vente marché" },
-    { id: crypto.randomUUID(), date: "2026-08-13", field: "Serre 1", crop: "Poivrons", quantity: 48, unit: "kg", quality: "Bonne", destination: "Commande restaurant" },
-    { id: crypto.randomUUID(), date: "2026-08-15", field: "Plein champ Nord", crop: "Papayes", quantity: 32, unit: "pièces", quality: "À trier", destination: "Stock ferme" }
+    { id: createId(), date: "2026-08-10", field: "Serre 2", crop: "Piment", quantity: 64, unit: "kg", quality: "Très bonne", destination: "Vente marché" },
+    { id: createId(), date: "2026-08-13", field: "Serre 1", crop: "Poivrons", quantity: 48, unit: "kg", quality: "Bonne", destination: "Commande restaurant" },
+    { id: createId(), date: "2026-08-15", field: "Plein champ Nord", crop: "Papayes", quantity: 32, unit: "pièces", quality: "À trier", destination: "Stock ferme" }
   ],
   crops: [
-    { id: crypto.randomUUID(), name: "Poivrons", active: true, family: "Solanacées", cycle: "90 à 120 jours", water: "Régulier, sans excès", spacing: "50 x 50 cm", notes: "Surveiller les thrips, acariens et coups de chaleur en serre." },
-    { id: crypto.randomUUID(), name: "Piment", active: true, family: "Solanacées", cycle: "100 à 150 jours", water: "Modéré et fréquent", spacing: "50 x 60 cm", notes: "Récoltes échelonnées. Bien suivre floraison, nouaison et attaques d'insectes." },
-    { id: crypto.randomUUID(), name: "Papayes", active: true, family: "Caricacées", cycle: "8 à 12 mois avant production", water: "Profond et régulier", spacing: "2,5 x 2,5 m", notes: "Éviter l'eau stagnante. Paillage utile en plein champ." }
+    { id: createId(), name: "Poivrons", active: true, family: "Solanacées", cycle: "90 à 120 jours", water: "Régulier, sans excès", spacing: "50 x 50 cm", notes: "Surveiller les thrips, acariens et coups de chaleur en serre." },
+    { id: createId(), name: "Piment", active: true, family: "Solanacées", cycle: "100 à 150 jours", water: "Modéré et fréquent", spacing: "50 x 60 cm", notes: "Récoltes échelonnées. Bien suivre floraison, nouaison et attaques d'insectes." },
+    { id: createId(), name: "Papayes", active: true, family: "Caricacées", cycle: "8 à 12 mois avant production", water: "Profond et régulier", spacing: "2,5 x 2,5 m", notes: "Éviter l'eau stagnante. Paillage utile en plein champ." }
   ],
   stock: [
-    { id: crypto.randomUUID(), item: "Semences poivron", category: "Semences", quantity: 8, unit: "sachets", threshold: 4 },
-    { id: crypto.randomUUID(), item: "Plants papayer", category: "Plantation", quantity: 120, unit: "plants", threshold: 60 },
-    { id: crypto.randomUUID(), item: "Compost", category: "Fertilisation", quantity: 1.6, unit: "t", threshold: 2 },
-    { id: crypto.randomUUID(), item: "Film serre", category: "Serre", quantity: 2, unit: "rouleaux", threshold: 1 }
+    { id: createId(), item: "Semences poivron", category: "Semences", quantity: 8, unit: "sachets", threshold: 4 },
+    { id: createId(), item: "Plants papayer", category: "Plantation", quantity: 120, unit: "plants", threshold: 60 },
+    { id: createId(), item: "Compost", category: "Fertilisation", quantity: 1.6, unit: "t", threshold: 2 },
+    { id: createId(), item: "Film serre", category: "Serre", quantity: 2, unit: "rouleaux", threshold: 1 }
   ],
   finance: [
-    { id: crypto.randomUUID(), date: "2026-08-12", label: "Vente piment frais", crop: "Piment", type: "Recette", amount: 185000, isSale: "on", saleQuantity: 64, salePrice: 2890.625, saleUnit: "kg" },
-    { id: crypto.randomUUID(), date: "2026-08-13", label: "Vente poivrons restaurant", crop: "Poivrons", type: "Recette", amount: 144000, isSale: "on", saleQuantity: 48, salePrice: 3000, saleUnit: "kg" },
-    { id: crypto.randomUUID(), date: "2026-08-14", label: "Main d'oeuvre serre", crop: "Poivrons", type: "Dépense", amount: 42000 },
-    { id: crypto.randomUUID(), date: "2026-08-15", label: "Achat compost papayes", crop: "Papayes", type: "Dépense", amount: 38000 }
+    { id: createId(), date: "2026-08-12", label: "Vente piment frais", crop: "Piment", type: "Recette", amount: 185000, isSale: "on", saleQuantity: 64, salePrice: 2890.625, saleUnit: "kg" },
+    { id: createId(), date: "2026-08-13", label: "Vente poivrons restaurant", crop: "Poivrons", type: "Recette", amount: 144000, isSale: "on", saleQuantity: 48, salePrice: 3000, saleUnit: "kg" },
+    { id: createId(), date: "2026-08-14", label: "Main d'oeuvre serre", crop: "Poivrons", type: "Dépense", amount: 42000 },
+    { id: createId(), date: "2026-08-15", label: "Achat compost papayes", crop: "Papayes", type: "Dépense", amount: 38000 }
   ],
   team: [
     { id: "admin-user", name: "Administrateur", role: "Admin", phone: "", profileId: "admin-profile", login: "admin", password: "admin123" }
@@ -454,7 +459,7 @@ function hasUsableAccounts(accounts = []) {
 
 function normalizeDailyTaskTemplates(templates = []) {
   return templates.map((template) => ({
-    id: template.id || crypto.randomUUID(),
+    id: template.id || createId(),
     title: template.title || "Tâche de base",
     crops: Array.isArray(template.crops) ? template.crops : [],
     modes: Array.isArray(template.modes) ? template.modes : [],
@@ -739,6 +744,7 @@ function currentUser() {
 }
 
 function showLogin(message = "", type = "error") {
+  document.body.classList.add("app-ready");
   document.body.classList.remove("authenticated");
   const loginMessage = document.querySelector("#loginMessage");
   if (loginMessage) {
@@ -751,6 +757,11 @@ function showLogin(message = "", type = "error") {
 
 function showStartupError(message) {
   const loginMessage = document.querySelector("#loginMessage");
+  const startupBanner = document.querySelector("#startupBanner");
+  if (startupBanner) {
+    startupBanner.textContent = `Erreur de chargement : ${message}`;
+    startupBanner.classList.add("startup-error");
+  }
   if (!loginMessage) return;
   document.body.classList.remove("authenticated");
   loginMessage.textContent = `Erreur : ${message}`;
@@ -765,6 +776,7 @@ function showApp() {
   }
   activeProfileId = user.profileId || "terrain-profile";
   localStorage.setItem(activeProfileKey, activeProfileId);
+  document.body.classList.add("app-ready");
   document.body.classList.add("authenticated");
   try {
     ensureAllowedView();
@@ -1118,7 +1130,7 @@ function generateDailyTasks() {
     }
     return;
   }
-  state.tasks = tasksToAdd.map((task) => ({ id: crypto.randomUUID(), ...task })).concat(state.tasks);
+  state.tasks = tasksToAdd.map((task) => ({ id: createId(), ...task })).concat(state.tasks);
   activeTaskFilter = "Tous";
   saveState();
   render();
@@ -1787,7 +1799,7 @@ function handleFormSubmit(event) {
       item.id === editingRecord.id ? { ...item, ...data } : item
     );
   } else {
-    state[config.collection].unshift({ id: crypto.randomUUID(), ...data });
+    state[config.collection].unshift({ id: createId(), ...data });
   }
   saveState();
   editingRecord = null;
@@ -1885,4 +1897,5 @@ try {
 } catch (error) {
   showStartupError(error.message);
 }
+
 
