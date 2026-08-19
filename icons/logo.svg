@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Logo AgriPilot">
+  <rect width="96" height="96" rx="20" fill="#285238"/>
+  <circle cx="70" cy="25" r="10" fill="#e8b84a"/>
+  <path d="M18 69c15-17 34-25 60-24" fill="none" stroke="#f8fbf4" stroke-width="5" stroke-linecap="round"/>
+  <path d="M20 79c13-11 31-16 56-15" fill="none" stroke="#74a65b" stroke-width="5" stroke-linecap="round"/>
+  <path d="M42 55c-12-1-20-9-24-23 15 0 24 7 24 23Z" fill="#74a65b"/>
+  <path d="M45 55c13-2 22-11 27-26-16 1-26 10-27 26Z" fill="#f8fbf4"/>
+  <path d="M44 66V36" fill="none" stroke="#f8fbf4" stroke-width="5" stroke-linecap="round"/>
+  <text x="48" y="87" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="800" fill="#f8fbf4">AP</text>
+</svg>
