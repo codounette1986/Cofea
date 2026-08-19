@@ -78,7 +78,7 @@ const starterState = {
 const retiredDemoUserLogins = new Set(["awa", "mamadou", "ibrahima"]);
 const retiredDemoUserNames = new Set(["awa ndiaye", "mamadou fall", "ibrahima diop"]);
 
-let state = loadState();
+let state;
 let currentView = "dashboard";
 let activeTaskFilter = "Tous";
 let activePriceCrop = "Toutes";
@@ -660,6 +660,7 @@ function money(value) {
 }
 
 function init() {
+  state = loadState();
   bindEvents();
   registerServiceWorker();
   if (currentUser()) {
