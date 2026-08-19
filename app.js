@@ -669,6 +669,12 @@ function recordToJsonRemoteRow(item) {
   };
 }
 
+async function responseErrorText(response) {
+  const body = await response.text().catch(() => "");
+  if (!body) return `${response.status}`;
+  return `${response.status} ${body}`;
+}
+
 function normalizeLoadedState(data) {
   data = repairTextEncoding(data || {});
   const sourceTeam = withoutRetiredDemoUsers(data.team || starterState.team);
@@ -745,26 +751,38 @@ async function replaceRemoteCollection(collection) {
     : collection === "userAccounts"
       ? userAccountsFromTeam(state.team || [])
       : state[collection] || [];
-  const rows = source.map((item) => recordToRemoteRow(collection, item));
-  const deleteResponse = await supabaseRequest(`${remoteTableUrl(table)}?id=neq.__agripilot_never__`, {
-    method: "DELETE",
-    headers: supabaseHeaders({ Prefer: "return=minimal" })
-  });
-  if (!deleteResponse.ok) throw new Error(`Nettoyage ${table} impossible (${deleteResponse.status})`);
-  if (!rows.length) return;
-  const insertResponse = await supabaseRequest(remoteTableUrl(table), {
-    method: "POST",
-    headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
-    body: JSON.stringify(rows)
-  });
-  if (insertResponse.ok) return;
-  const fallbackRows = source.map(recordToJsonRemoteRow);
-  const fallbackResponse = await supabaseRequest(remoteTableUrl(table), {
-    method: "POST",
-    headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
-    body: JSON.stringify(fallbackRows)
-  });
-  if (!fallbackResponse.ok) throw new Error(`Sauvegarde ${table} impossible (${insertResponse.status})`);
+  if (source.length) {
+    const rows = source.map((item) => recordToRemoteRow(collection, item));
+    const upsertResponse = await supabaseRequest(`${remoteTableUrl(table)}?on_conflict=id`, {
+      method: "POST",
+      headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify(rows)
+    });
+    if (!upsertResponse.ok) {
+      const columnError = await responseErrorText(upsertResponse);
+      const fallbackRows = source.map(recordToJsonRemoteRow);
+      const fallbackResponse = await supabaseRequest(`${remoteTableUrl(table)}?on_conflict=id`, {
+        method: "POST",
+        headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+        body: JSON.stringify(fallbackRows)
+      });
+      if (!fallbackResponse.ok) {
+        const fallbackError = await responseErrorText(fallbackResponse);
+        throw new Error(`Sauvegarde ${table} impossible. Colonnes: ${columnError}. JSON: ${fallbackError}`);
+      }
+    }
+  }
+
+  const remoteRows = await readRemoteRows(table).catch(() => []);
+  const currentIds = new Set(source.map((item) => String(item.id)));
+  const removedIds = remoteRows.map((row) => row.id).filter((id) => !currentIds.has(String(id)));
+  for (const id of removedIds) {
+    const deleteResponse = await supabaseRequest(`${remoteTableUrl(table)}?id=eq.${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: supabaseHeaders({ Prefer: "return=minimal" })
+    });
+    if (!deleteResponse.ok) throw new Error(`Nettoyage ${table} impossible (${await responseErrorText(deleteResponse)})`);
+  }
 }
 
 async function saveRemoteMeta() {

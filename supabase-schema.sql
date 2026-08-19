@@ -391,3 +391,5 @@ on conflict (id) do update set
 insert into public.app_sync_meta (id, updated_at)
 values ('agripilot-main', now())
 on conflict (id) do update set updated_at = excluded.updated_at;
+
+notify pgrst, 'reload schema';
