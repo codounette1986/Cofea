@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=75" />
+    <link rel="manifest" href="./manifest.webmanifest?v=78" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=75" />
+    <link rel="stylesheet" href="./styles.css?v=78" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -342,7 +342,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v75";
+        var refreshKey = "agripilot-cache-refresh-v78";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -361,7 +361,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=75");
+          window.location.replace("./start.html?v=78");
         });
       })();
     </script>
@@ -386,6 +386,6 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=75" defer></script>
+    <script src="./app.js?v=78" defer></script>
   </body>
 </html>

@@ -352,6 +352,7 @@ function loadState() {
     team: ensureAdminAccess(mergeDefaultTeam(localTeam)),
     userAccounts: userAccountsFromTeam(localTeam),
     dailyTaskTemplates: normalizeDailyTaskTemplates(parsed.dailyTaskTemplates || dailyTaskTemplates),
+    deletedRecords: normalizeDeletedRecords(parsed.deletedRecords),
     updatedAt: parsed.updatedAt || new Date().toISOString()
   };
 }
@@ -368,12 +369,64 @@ function createInitialState() {
     team: starterState.team,
     userAccounts: userAccountsFromTeam(starterState.team),
     dailyTaskTemplates,
+    deletedRecords: {},
     updatedAt: new Date().toISOString()
   });
 }
 
 function arrayOrEmpty(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function collectionObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeDeletedRecords(value = {}) {
+  const normalized = {};
+  syncedCollections().forEach((collection) => {
+    normalized[collection] = collectionObject(value[collection]);
+  });
+  return normalized;
+}
+
+function recordTime(record = {}) {
+  const time = new Date(record.updatedAt || record.updated_at || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function touchRecord(record, timestamp = new Date().toISOString()) {
+  return { ...record, updatedAt: timestamp, updatedBy: currentUserLabel() };
+}
+
+function currentUserLabel() {
+  const user = currentUser && currentUser();
+  if (!user) return "Système";
+  return user.name || user.login || user.role || "Utilisateur";
+}
+
+function mergeRecords(localRows = [], remoteRows = [], deletedRows = {}) {
+  const merged = new Map();
+  remoteRows.forEach((row) => {
+    if (!deletedRows[row.id]) merged.set(row.id, row);
+  });
+  localRows.forEach((row) => {
+    if (deletedRows[row.id]) return;
+    const existing = merged.get(row.id);
+    if (!existing || recordTime(row) >= recordTime(existing)) merged.set(row.id, row);
+  });
+  return Array.from(merged.values());
+}
+
+function rememberDeletion(collection, id) {
+  state.deletedRecords = normalizeDeletedRecords(state.deletedRecords);
+  state.deletedRecords[collection][id] = new Date().toISOString();
+}
+
+function collectionForSync(collection, sourceState = state) {
+  if (collection === "team") return stripTeamCredentials(sourceState.team || []);
+  if (collection === "userAccounts") return userAccountsFromTeam(sourceState.team || []);
+  return sourceState[collection] || [];
 }
 
 function matchesStarterExample(item, key) {
@@ -397,6 +450,7 @@ function saveState(options = {}) {
   const shouldTouch = options.touch !== false;
   const shouldSync = options.sync !== false;
   if (shouldTouch) state.updatedAt = new Date().toISOString();
+  state.deletedRecords = normalizeDeletedRecords(state.deletedRecords);
   state.userAccounts = userAccountsFromTeam(state.team);
   localStorage.setItem(stateKey, JSON.stringify(state));
   if (shouldSync) scheduleRemoteSave();
@@ -611,7 +665,7 @@ const remoteJsonFields = new Set(["pages", "sections", "crops", "modes"]);
 
 function remoteRowToRecord(collection, row) {
   if (row.data && typeof row.data === "object") {
-    return repairTextEncoding({ id: row.id, ...row.data });
+    return repairTextEncoding({ id: row.id, updatedAt: row.updated_at || row.data.updatedAt || "", updatedBy: row.updated_by || row.data.updatedBy || "", ...row.data });
   }
   const columnMap = remoteColumnMap[collection] || {};
   const record = { id: row.id };
@@ -620,6 +674,8 @@ function remoteRowToRecord(collection, row) {
       record[appKey] = row[columnKey];
     }
   });
+  record.updatedAt = row.updated_at || "";
+  record.updatedBy = row.updated_by || "";
   if (collection === "finance") record.isSale = row.is_sale ? "on" : "";
   return repairTextEncoding(record);
 }
@@ -637,7 +693,8 @@ function recordToRemoteRow(collection, item) {
   const columnMap = remoteColumnMap[collection] || {};
   const row = {
     id: item.id,
-    updated_at: state.updatedAt || new Date().toISOString()
+    updated_at: item.updatedAt || state.updatedAt || new Date().toISOString(),
+    updated_by: item.updatedBy || currentUserLabel()
   };
   Object.entries(columnMap).forEach(([appKey, columnKey]) => {
     row[columnKey] = normalizeRemoteValue(collection, appKey, item[appKey]);
@@ -649,7 +706,7 @@ function recordToJsonRemoteRow(item) {
   return {
     id: item.id,
     data: item,
-    updated_at: state.updatedAt || new Date().toISOString()
+    updated_at: item.updatedAt || state.updatedAt || new Date().toISOString()
   };
 }
 
@@ -677,8 +734,37 @@ function normalizeLoadedState(data) {
     team: ensureAdminAccess(mergeDefaultTeam(remoteTeam)),
     userAccounts: userAccountsFromTeam(remoteTeam),
     dailyTaskTemplates: normalizeDailyTaskTemplates(data.dailyTaskTemplates || dailyTaskTemplates),
+    deletedRecords: normalizeDeletedRecords(data.deletedRecords),
     updatedAt: data.updatedAt || new Date().toISOString()
   };
+}
+
+function mergeRemoteState(remoteData = {}) {
+  const remoteState = normalizeLoadedState(remoteData);
+  state.deletedRecords = normalizeDeletedRecords(state.deletedRecords);
+  syncedCollections().forEach((collection) => {
+    if (collection === "team" || collection === "userAccounts") return;
+    state[collection] = mergeRecords(
+      collectionForSync(collection, state),
+      collectionForSync(collection, remoteState),
+      collectionObject(state.deletedRecords[collection])
+    );
+  });
+  const mergedAccounts = mergeRecords(
+    userAccountsFromTeam(state.team || []),
+    userAccountsFromTeam(remoteState.team || []),
+    collectionObject(state.deletedRecords.userAccounts)
+  );
+  const mergedTeam = mergeRecords(
+    stripTeamCredentials(state.team || []),
+    stripTeamCredentials(remoteState.team || []),
+    collectionObject(state.deletedRecords.team)
+  );
+  state.team = ensureAdminAccess(teamWithUserAccounts(mergedTeam, mergedAccounts));
+  state.userAccounts = userAccountsFromTeam(state.team);
+  const localTime = new Date(state.updatedAt || 0).getTime();
+  const remoteTime = new Date(remoteState.updatedAt || 0).getTime();
+  state.updatedAt = new Date(Math.max(localTime || 0, remoteTime || 0, Date.now())).toISOString();
 }
 
 function setSyncStatus(status, detail) {
@@ -723,20 +809,48 @@ async function fetchRemoteState() {
   if (!remoteMeta) return null;
   const remoteData = { updatedAt: remoteMeta.updated_at };
   for (const collection of syncedCollections()) {
-    remoteData[collection] = await fetchRemoteCollection(collection);
+    remoteData[collection] = await fetchRemoteCollection(collection).catch(() => []);
   }
   return { data: remoteData, updated_at: remoteMeta.updated_at };
 }
 
 async function replaceRemoteCollection(collection) {
   const table = supabaseConfig.tables[collection];
-  const source = collection === "team"
-    ? stripTeamCredentials(state.team || [])
-    : collection === "userAccounts"
-      ? userAccountsFromTeam(state.team || [])
-      : state[collection] || [];
-  if (source.length) {
-    const rows = source.map((item) => recordToRemoteRow(collection, item));
+  const source = collectionForSync(collection, state);
+  const remoteRowsRaw = await readRemoteRows(table).catch(() => []);
+  const remoteRows = remoteRowsRaw.map((row) => remoteRowToRecord(collection, row));
+  const deletedRows = collectionObject((state.deletedRecords || {})[collection]);
+
+  if (!source.length && !Object.keys(deletedRows).length) {
+    if (remoteRows.length && collection !== "userAccounts") state[collection] = mergeRecords([], remoteRows, {});
+    return;
+  }
+
+  for (const [id, deletedAt] of Object.entries(deletedRows)) {
+    const remoteRecord = remoteRows.find((row) => row.id === id);
+    if (remoteRecord && recordTime(remoteRecord) > new Date(deletedAt).getTime()) {
+      delete deletedRows[id];
+      continue;
+    }
+    const deleteResponse = await supabaseRequest(`${remoteTableUrl(table)}?id=eq.${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: supabaseHeaders({ Prefer: "return=minimal" })
+    });
+    if (!deleteResponse.ok && deleteResponse.status !== 404) {
+      throw new Error(`Nettoyage ${table} impossible (${await responseErrorText(deleteResponse)})`);
+    }
+    delete deletedRows[id];
+  }
+
+  const mergedSource = mergeRecords(source, remoteRows, deletedRows);
+  if (collection !== "userAccounts") state[collection] = mergedSource;
+  if (collection === "team") {
+    state.team = ensureAdminAccess(teamWithUserAccounts(mergedSource, userAccountsFromTeam(state.team || [])));
+  }
+  state.deletedRecords = normalizeDeletedRecords(state.deletedRecords);
+
+  if (mergedSource.length) {
+    const rows = mergedSource.map((item) => recordToRemoteRow(collection, item));
     const upsertResponse = await supabaseRequest(`${remoteTableUrl(table)}?on_conflict=id`, {
       method: "POST",
       headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
@@ -755,17 +869,6 @@ async function replaceRemoteCollection(collection) {
         throw new Error(`Sauvegarde ${table} impossible. Colonnes: ${columnError}. JSON: ${fallbackError}`);
       }
     }
-  }
-
-  const remoteRows = await readRemoteRows(table).catch(() => []);
-  const currentIds = new Set(source.map((item) => String(item.id)));
-  const removedIds = remoteRows.map((row) => row.id).filter((id) => !currentIds.has(String(id)));
-  for (const id of removedIds) {
-    const deleteResponse = await supabaseRequest(`${remoteTableUrl(table)}?id=eq.${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      headers: supabaseHeaders({ Prefer: "return=minimal" })
-    });
-    if (!deleteResponse.ok) throw new Error(`Nettoyage ${table} impossible (${await responseErrorText(deleteResponse)})`);
   }
 }
 
@@ -789,6 +892,7 @@ async function pushRemoteState() {
     await replaceRemoteCollection(collection);
   }
   await saveRemoteMeta();
+  saveState({ sync: false, touch: false });
   markRemoteSynced();
 }
 
@@ -817,29 +921,16 @@ async function syncFromSupabase() {
       return;
     }
     const remoteData = remoteRow.data;
-    const remoteDate = new Date(remoteData.updatedAt || remoteRow.updated_at || 0).getTime();
-    const localDate = new Date(state.updatedAt || 0).getTime();
     const localAccounts = userAccountsFromTeam(state.team || []);
-    const remoteHasBusinessData = hasBusinessData(remoteData);
-    const localHasBusinessData = hasBusinessData(state);
     if (!hasUsableAccounts(remoteData.userAccounts) && hasUsableAccounts(localAccounts)) {
       state.userAccounts = localAccounts;
       await pushRemoteState();
       return;
     }
-    if (!remoteHasBusinessData && localHasBusinessData) {
-      await pushRemoteState();
-      return;
-    }
-    if (remoteDate > localDate) {
-      state = normalizeLoadedState(remoteData);
-      saveState({ sync: false, touch: false });
-      render();
-    } else if (localDate > remoteDate) {
-      await pushRemoteState();
-      return;
-    }
-    markRemoteSynced();
+    mergeRemoteState(remoteData);
+    saveState({ sync: false, touch: false });
+    await pushRemoteState();
+    render();
   } catch (error) {
     setSyncStatus("error", error.message);
   }
@@ -1508,7 +1599,7 @@ function refreshTaskStatuses() {
     const status = taskStatus(task);
     if (status !== task.status) {
       changed = true;
-      return { ...task, status };
+      return touchRecord({ ...task, status });
     }
     return task;
   });
@@ -2026,11 +2117,12 @@ function handleFormSubmit(event) {
     }
   }
   if (editingRecord) {
+    const timestamp = new Date().toISOString();
     state[config.collection] = state[config.collection].map((item) =>
-      item.id === editingRecord.id ? { ...item, ...data } : item
+      item.id === editingRecord.id ? touchRecord({ ...item, ...data }, timestamp) : item
     );
   } else {
-    state[config.collection].unshift({ id: createId(), ...data });
+    state[config.collection].unshift(touchRecord({ id: createId(), ...data }));
   }
   saveState();
   editingRecord = null;
@@ -2071,7 +2163,7 @@ async function handlePasswordSubmit(event) {
   }
 
   state.team = state.team.map((member) =>
-    member.id === person.id ? { ...member, password: newPassword } : member
+    member.id === person.id ? touchRecord({ ...member, password: newPassword }) : member
   );
   if (submitButton) submitButton.disabled = true;
   showPasswordMessage("Mot de passe mis à jour localement. Synchronisation Supabase...", "success");
@@ -2104,6 +2196,8 @@ function showPasswordMessage(text, type) {
 
 function deleteRecord(collection, id) {
   state[collection] = state[collection].filter((item) => item.id !== id);
+  rememberDeletion(collection, id);
+  if (collection === "team") rememberDeletion("userAccounts", id);
   if (collection === "profiles" && activeProfileId === id) {
     activeProfileId = "admin-profile";
     localStorage.setItem(activeProfileKey, activeProfileId);
@@ -2113,14 +2207,14 @@ function deleteRecord(collection, id) {
 }
 
 function completeTask(id) {
-  state.tasks = state.tasks.map((task) => task.id === id ? { ...task, status: "Terminé" } : task);
+  state.tasks = state.tasks.map((task) => task.id === id ? touchRecord({ ...task, status: "Terminé" }) : task);
   saveState();
   render();
 }
 
 function toggleField(id) {
   state.fields = state.fields.map((field) =>
-    field.id === id ? { ...field, active: field.active === false } : field
+    field.id === id ? touchRecord({ ...field, active: field.active === false }) : field
   );
   saveState();
   render();
@@ -2128,7 +2222,7 @@ function toggleField(id) {
 
 function toggleCrop(id) {
   state.crops = state.crops.map((crop) =>
-    crop.id === id ? { ...crop, active: crop.active === false } : crop
+    crop.id === id ? touchRecord({ ...crop, active: crop.active === false }) : crop
   );
   saveState();
   render();

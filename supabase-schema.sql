@@ -10,6 +10,7 @@ create table if not exists public.profiles (
   pages jsonb,
   sections jsonb,
   note text,
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -23,6 +24,7 @@ create table if not exists public.fields (
   health integer,
   mode text,
   field_update text,
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -33,6 +35,7 @@ create table if not exists public.tasks (
   owner text,
   due date,
   status text,
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -42,6 +45,7 @@ create table if not exists public.daily_task_templates (
   crops jsonb,
   modes jsonb,
   note text,
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -54,6 +58,7 @@ create table if not exists public.harvests (
   unit text,
   quality text,
   destination text,
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -66,6 +71,7 @@ create table if not exists public.crops (
   water text,
   spacing text,
   notes text,
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -76,6 +82,7 @@ create table if not exists public.stock (
   quantity numeric(12, 3),
   unit text,
   threshold numeric(12, 3),
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -91,6 +98,7 @@ create table if not exists public.finance (
   sale_price numeric(14, 2),
   sale_unit text,
   sale_kg_equivalent numeric(12, 3),
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -100,6 +108,7 @@ create table if not exists public.team (
   role text,
   phone text,
   profile_id text,
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -109,6 +118,7 @@ create table if not exists public.user_accounts (
   login text unique,
   password text,
   profile_id text,
+  updated_by text,
   updated_at timestamptz not null default now()
 );
 
@@ -117,6 +127,7 @@ alter table public.profiles add column if not exists role text;
 alter table public.profiles add column if not exists pages jsonb;
 alter table public.profiles add column if not exists sections jsonb;
 alter table public.profiles add column if not exists note text;
+alter table public.profiles add column if not exists updated_by text;
 alter table public.profiles add column if not exists updated_at timestamptz not null default now();
 
 alter table public.fields add column if not exists name text;
@@ -127,6 +138,7 @@ alter table public.fields add column if not exists stage text;
 alter table public.fields add column if not exists health integer;
 alter table public.fields add column if not exists mode text;
 alter table public.fields add column if not exists field_update text;
+alter table public.fields add column if not exists updated_by text;
 alter table public.fields add column if not exists updated_at timestamptz not null default now();
 
 alter table public.tasks add column if not exists title text;
@@ -134,12 +146,14 @@ alter table public.tasks add column if not exists field text;
 alter table public.tasks add column if not exists owner text;
 alter table public.tasks add column if not exists due date;
 alter table public.tasks add column if not exists status text;
+alter table public.tasks add column if not exists updated_by text;
 alter table public.tasks add column if not exists updated_at timestamptz not null default now();
 
 alter table public.daily_task_templates add column if not exists title text;
 alter table public.daily_task_templates add column if not exists crops jsonb;
 alter table public.daily_task_templates add column if not exists modes jsonb;
 alter table public.daily_task_templates add column if not exists note text;
+alter table public.daily_task_templates add column if not exists updated_by text;
 alter table public.daily_task_templates add column if not exists updated_at timestamptz not null default now();
 
 alter table public.harvests add column if not exists date date;
@@ -149,6 +163,7 @@ alter table public.harvests add column if not exists quantity numeric(12, 3);
 alter table public.harvests add column if not exists unit text;
 alter table public.harvests add column if not exists quality text;
 alter table public.harvests add column if not exists destination text;
+alter table public.harvests add column if not exists updated_by text;
 alter table public.harvests add column if not exists updated_at timestamptz not null default now();
 
 alter table public.crops add column if not exists name text;
@@ -158,6 +173,7 @@ alter table public.crops add column if not exists cycle text;
 alter table public.crops add column if not exists water text;
 alter table public.crops add column if not exists spacing text;
 alter table public.crops add column if not exists notes text;
+alter table public.crops add column if not exists updated_by text;
 alter table public.crops add column if not exists updated_at timestamptz not null default now();
 
 alter table public.stock add column if not exists item text;
@@ -165,6 +181,7 @@ alter table public.stock add column if not exists category text;
 alter table public.stock add column if not exists quantity numeric(12, 3);
 alter table public.stock add column if not exists unit text;
 alter table public.stock add column if not exists threshold numeric(12, 3);
+alter table public.stock add column if not exists updated_by text;
 alter table public.stock add column if not exists updated_at timestamptz not null default now();
 
 alter table public.finance add column if not exists date date;
@@ -177,18 +194,21 @@ alter table public.finance add column if not exists sale_quantity numeric(12, 3)
 alter table public.finance add column if not exists sale_price numeric(14, 2);
 alter table public.finance add column if not exists sale_unit text;
 alter table public.finance add column if not exists sale_kg_equivalent numeric(12, 3);
+alter table public.finance add column if not exists updated_by text;
 alter table public.finance add column if not exists updated_at timestamptz not null default now();
 
 alter table public.team add column if not exists name text;
 alter table public.team add column if not exists role text;
 alter table public.team add column if not exists phone text;
 alter table public.team add column if not exists profile_id text;
+alter table public.team add column if not exists updated_by text;
 alter table public.team add column if not exists updated_at timestamptz not null default now();
 
 alter table public.user_accounts add column if not exists team_id text;
 alter table public.user_accounts add column if not exists login text;
 alter table public.user_accounts add column if not exists password text;
 alter table public.user_accounts add column if not exists profile_id text;
+alter table public.user_accounts add column if not exists updated_by text;
 alter table public.user_accounts add column if not exists updated_at timestamptz not null default now();
 
 do $$
@@ -199,7 +219,8 @@ begin
       role = coalesce(role, data->>'role'),
       pages = coalesce(pages, data->'pages'),
       sections = coalesce(sections, data->'sections'),
-      note = coalesce(note, data->>'note');
+      note = coalesce(note, data->>'note'),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'fields' and column_name = 'data') then
@@ -211,7 +232,8 @@ begin
       stage = coalesce(stage, data->>'stage'),
       health = coalesce(health, nullif(data->>'health', '')::integer),
       mode = coalesce(mode, data->>'mode'),
-      field_update = coalesce(field_update, data->>'update');
+      field_update = coalesce(field_update, data->>'update'),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'tasks' and column_name = 'data') then
@@ -220,7 +242,8 @@ begin
       field = coalesce(field, data->>'field'),
       owner = coalesce(owner, data->>'owner'),
       due = coalesce(due, nullif(data->>'due', '')::date),
-      status = coalesce(status, data->>'status');
+      status = coalesce(status, data->>'status'),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'daily_task_templates' and column_name = 'data') then
@@ -228,7 +251,8 @@ begin
       title = coalesce(title, data->>'title'),
       crops = coalesce(crops, data->'crops'),
       modes = coalesce(modes, data->'modes'),
-      note = coalesce(note, data->>'note');
+      note = coalesce(note, data->>'note'),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'harvests' and column_name = 'data') then
@@ -239,7 +263,8 @@ begin
       quantity = coalesce(quantity, nullif(data->>'quantity', '')::numeric),
       unit = coalesce(unit, data->>'unit'),
       quality = coalesce(quality, data->>'quality'),
-      destination = coalesce(destination, data->>'destination');
+      destination = coalesce(destination, data->>'destination'),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'crops' and column_name = 'data') then
@@ -250,7 +275,8 @@ begin
       cycle = coalesce(cycle, data->>'cycle'),
       water = coalesce(water, data->>'water'),
       spacing = coalesce(spacing, data->>'spacing'),
-      notes = coalesce(notes, data->>'notes');
+      notes = coalesce(notes, data->>'notes'),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'stock' and column_name = 'data') then
@@ -259,7 +285,8 @@ begin
       category = coalesce(category, data->>'category'),
       quantity = coalesce(quantity, nullif(data->>'quantity', '')::numeric),
       unit = coalesce(unit, data->>'unit'),
-      threshold = coalesce(threshold, nullif(data->>'threshold', '')::numeric);
+      threshold = coalesce(threshold, nullif(data->>'threshold', '')::numeric),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance' and column_name = 'data') then
@@ -273,7 +300,8 @@ begin
       sale_quantity = coalesce(sale_quantity, nullif(data->>'saleQuantity', '')::numeric),
       sale_price = coalesce(sale_price, nullif(data->>'salePrice', '')::numeric),
       sale_unit = coalesce(sale_unit, data->>'saleUnit'),
-      sale_kg_equivalent = coalesce(sale_kg_equivalent, nullif(data->>'saleKgEquivalent', '')::numeric);
+      sale_kg_equivalent = coalesce(sale_kg_equivalent, nullif(data->>'saleKgEquivalent', '')::numeric),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'team' and column_name = 'data') then
@@ -281,7 +309,8 @@ begin
       name = coalesce(name, data->>'name'),
       role = coalesce(role, data->>'role'),
       phone = coalesce(phone, data->>'phone'),
-      profile_id = coalesce(profile_id, data->>'profileId');
+      profile_id = coalesce(profile_id, data->>'profileId'),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'user_accounts' and column_name = 'data') then
@@ -289,20 +318,10 @@ begin
       team_id = coalesce(team_id, data->>'teamId'),
       login = coalesce(login, data->>'login'),
       password = coalesce(password, data->>'password'),
-      profile_id = coalesce(profile_id, data->>'profileId');
+      profile_id = coalesce(profile_id, data->>'profileId'),
+      updated_by = coalesce(updated_by, data->>'updatedBy');
   end if;
 end $$;
-
-alter table public.profiles drop column if exists data;
-alter table public.fields drop column if exists data;
-alter table public.tasks drop column if exists data;
-alter table public.daily_task_templates drop column if exists data;
-alter table public.harvests drop column if exists data;
-alter table public.crops drop column if exists data;
-alter table public.stock drop column if exists data;
-alter table public.finance drop column if exists data;
-alter table public.team drop column if exists data;
-alter table public.user_accounts drop column if exists data;
 
 do $$
 declare
@@ -338,7 +357,7 @@ begin
   end loop;
 end $$;
 
-insert into public.profiles (id, name, role, pages, sections, note, updated_at)
+insert into public.profiles (id, name, role, pages, sections, note, updated_by, updated_at)
 values (
   'admin-profile',
   'Admins',
@@ -346,6 +365,7 @@ values (
   null,
   null,
   'Accès complet à toute l''application.',
+  'Système',
   now()
 )
 on conflict (id) do update set
@@ -354,15 +374,17 @@ on conflict (id) do update set
   pages = excluded.pages,
   sections = excluded.sections,
   note = excluded.note,
+  updated_by = coalesce(public.profiles.updated_by, excluded.updated_by),
   updated_at = excluded.updated_at;
 
-insert into public.team (id, name, role, phone, profile_id, updated_at)
+insert into public.team (id, name, role, phone, profile_id, updated_by, updated_at)
 values (
   'admin-user',
   'Administrateur',
   'Admin',
   '',
   'admin-profile',
+  'Système',
   now()
 )
 on conflict (id) do update set
@@ -370,15 +392,17 @@ on conflict (id) do update set
   role = excluded.role,
   phone = excluded.phone,
   profile_id = excluded.profile_id,
+  updated_by = coalesce(public.team.updated_by, excluded.updated_by),
   updated_at = excluded.updated_at;
 
-insert into public.user_accounts (id, team_id, login, password, profile_id, updated_at)
+insert into public.user_accounts (id, team_id, login, password, profile_id, updated_by, updated_at)
 values (
   'admin-user',
   'admin-user',
   'admin',
   coalesce((select password from public.user_accounts where id = 'admin-user'), 'admin123'),
   'admin-profile',
+  'Système',
   now()
 )
 on conflict (id) do update set
@@ -386,6 +410,7 @@ on conflict (id) do update set
   login = excluded.login,
   password = public.user_accounts.password,
   profile_id = excluded.profile_id,
+  updated_by = coalesce(public.user_accounts.updated_by, excluded.updated_by),
   updated_at = excluded.updated_at;
 
 insert into public.app_sync_meta (id, updated_at)
