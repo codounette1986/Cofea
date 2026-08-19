@@ -23,7 +23,7 @@ const supabaseConfig = {
 };
 
 function createId() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  if (globalThis.crypto && globalThis.crypto.randomUUID) return globalThis.crypto.randomUUID();
   return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
@@ -103,7 +103,7 @@ window.addEventListener("error", (event) => {
 });
 
 window.addEventListener("unhandledrejection", (event) => {
-  showStartupError(event.reason?.message || "Erreur réseau ou synchronisation interrompue.");
+  showStartupError((event.reason && event.reason.message) || "Erreur réseau ou synchronisation interrompue.");
 });
 
 const cropStages = [
@@ -622,7 +622,7 @@ async function syncFromSupabase() {
   setSyncStatus("syncing", "Lecture Supabase...");
   try {
     const remoteRow = await fetchRemoteState();
-    if (!remoteRow?.data) {
+    if (!remoteRow || !remoteRow.data) {
       await pushRemoteState();
       return;
     }
@@ -731,7 +731,8 @@ function bindEvents() {
   document.querySelector("#recordForm").addEventListener("submit", handleFormSubmit);
   document.querySelector("#changePasswordBtn").addEventListener("click", openPasswordModal);
   document.querySelector("#passwordForm").addEventListener("submit", handlePasswordSubmit);
-  document.querySelector("#syncNowBtn")?.addEventListener("click", syncFromSupabase);
+  const syncNowButton = document.querySelector("#syncNowBtn");
+  if (syncNowButton) syncNowButton.addEventListener("click", syncFromSupabase);
   window.addEventListener("online", () => {
     renderConnection();
     syncFromSupabase();
@@ -827,7 +828,7 @@ async function loginFromSupabaseAccounts(login, password) {
     );
     if (!account) return null;
     const remoteRow = await fetchRemoteState().catch(() => null);
-    if (remoteRow?.data) {
+    if (remoteRow && remoteRow.data) {
       state = normalizeLoadedState(remoteRow.data);
     } else {
       const remoteTeam = await fetchRemoteCollection("team").catch(() => []);
@@ -883,7 +884,7 @@ function render() {
 
 function renderConnection() {
   const online = navigator.onLine;
-  const controlled = Boolean(navigator.serviceWorker?.controller);
+  const controlled = Boolean(navigator.serviceWorker && navigator.serviceWorker.controller);
   const statusDot = document.querySelector("#statusDot");
   const statusText = document.querySelector("#statusText");
   const statusDetail = document.querySelector("#statusDetail");
@@ -1058,7 +1059,7 @@ function renderDailyTaskBase() {
   container.innerHTML = templates.map((template) => `
     <article class="daily-task-card">
       <strong>${template.title}</strong>
-      <span class="muted">${template.crops.length ? template.crops.join(" · ") : "Toutes les cultures"}${template.modes?.length ? ` · ${template.modes.join(" · ")}` : " · Tous modes"}</span>
+      <span class="muted">${template.crops.length ? template.crops.join(" · ") : "Toutes les cultures"}${template.modes && template.modes.length ? ` · ${template.modes.join(" · ")}` : " · Tous modes"}</span>
       <p>${template.note}</p>
       <div class="card-actions daily-task-actions">
         <button data-edit="${template.id}" data-type="baseTask">Modifier</button>
@@ -1105,12 +1106,12 @@ function currentDateValue() {
 function dailyTasksForField(field) {
   if (!isCropActive(field.crop)) return [];
   return (state.dailyTaskTemplates || [])
-    .filter((template) => !template.crops?.length || template.crops.includes(field.crop))
-    .filter((template) => !template.modes?.length || template.modes.includes(field.mode || "Plein champ"))
+    .filter((template) => !template.crops || !template.crops.length || template.crops.includes(field.crop))
+    .filter((template) => !template.modes || !template.modes.length || template.modes.includes(field.mode || "Plein champ"))
     .map((template) => ({
       title: `${template.title} - ${field.name}`,
       field: field.name,
-      owner: state.team[0]?.name || "À assigner",
+      owner: state.team[0] ? state.team[0].name : "À assigner",
       due: currentDateValue(),
       status: "À faire"
     }));
@@ -1435,7 +1436,8 @@ function profileOptions() {
 }
 
 function profileName(profileId) {
-  return state.profiles.find((profile) => profile.id === profileId)?.name || "Profil non défini";
+  const profile = state.profiles.find((item) => item.id === profileId);
+  return profile ? profile.name : "Profil non défini";
 }
 
 function profilePages(profile) {
@@ -1461,7 +1463,8 @@ function canAccessSection(sectionId) {
 }
 
 function pageLabel(pageId) {
-  return navItems.find(([id]) => id === pageId)?.[1] || pageId;
+  const page = navItems.find(([id]) => id === pageId);
+  return page ? page[1] : pageId;
 }
 
 function staffOptions() {
@@ -1569,7 +1572,7 @@ function renderProfileSelect() {
   const select = document.querySelector("#profileSelect");
   if (!select) return;
   if (!state.profiles.some((profile) => profile.id === activeProfileId)) {
-    activeProfileId = state.profiles[0]?.id || "admin-profile";
+    activeProfileId = state.profiles[0] ? state.profiles[0].id : "admin-profile";
     localStorage.setItem(activeProfileKey, activeProfileId);
   }
   select.innerHTML = state.profiles.map((profile) => optionTag(`${profile.name} - ${profile.role}`, `${profile.name} - ${profile.role}`, profile.id)).join("");
@@ -1593,17 +1596,17 @@ function openModal(type, id = null) {
   editingRecord = record ? { collection: config.collection, id } : null;
   document.querySelector("#modalTitle").textContent = saleShortcut ? "Ajouter une vente" : record ? config.title.replace("Ajouter", "Modifier") : config.title;
   document.querySelector("#modalFields").innerHTML = config.fields.map(([name, label, typeName, options]) => {
-    const value = record?.[name] ?? saleDefaults[name] ?? "";
+    const value = record && record[name] !== undefined ? record[name] : saleDefaults[name] !== undefined ? saleDefaults[name] : "";
     if (modalType === "team" && ["profileId", "login", "password"].includes(name) && !canManageProfiles()) return "";
     if (saleShortcut && name === "type") return `<input type="hidden" name="type" value="Recette" />`;
     if (saleShortcut && name === "isSale") return `<input type="hidden" name="isSale" value="on" />`;
     const safeValue = escapeHtml(value);
     if (typeName === "pagesSelect") {
-      const selectedPages = Array.isArray(value) && value.length ? value : defaultPagesByRole[record?.role || "Terrain"] || ["dashboard"];
+      const selectedPages = Array.isArray(value) && value.length ? value : defaultPagesByRole[(record && record.role) || "Terrain"] || ["dashboard"];
       return `<fieldset class="wide-field checkbox-group" id="profilePageAccess"><legend>${label}</legend>${accessPages.map((page) => `<label><input type="checkbox" name="pages" value="${page.id}" ${selectedPages.includes(page.id) ? "checked" : ""} />${page.label}</label>`).join("")}</fieldset>`;
     }
     if (typeName === "sectionsSelect") {
-      const selectedPages = Array.isArray(record?.pages) && record.pages.length ? record.pages : defaultPagesByRole[record?.role || "Terrain"] || ["dashboard"];
+      const selectedPages = record && Array.isArray(record.pages) && record.pages.length ? record.pages : defaultPagesByRole[(record && record.role) || "Terrain"] || ["dashboard"];
       const selectedSections = Array.isArray(value) ? value : allSectionsForPages(selectedPages);
       return `<div class="wide-field" id="profileSectionAccess">${renderSectionAccessChoices(selectedPages, selectedSections, label)}</div>`;
     }
@@ -1640,7 +1643,7 @@ function openModal(type, id = null) {
       return `<label class="wide-field">${label}<textarea name="${name}" rows="4" placeholder="Exemple : feuilles jaunies sur 2 lignes, arrosage renforcé, plants en bonne reprise...">${safeValue}</textarea></label>`;
     }
     if (typeName === "checkbox") {
-      const checked = modalType === "crop" && name === "active" ? record?.active !== false : Boolean(value);
+      const checked = modalType === "crop" && name === "active" ? !record || record.active !== false : Boolean(value);
       return `<label class="checkbox-field">${label}<input name="${name}" type="checkbox" ${checked ? "checked" : ""} /></label>`;
     }
     if (typeName === "select") {
@@ -1695,11 +1698,11 @@ function bindFinanceSaleFields() {
 
 function updateFinanceSaleFields() {
   const form = document.querySelector("#recordForm");
-  const isSale = form.elements.type?.value === "Recette";
-  const saleChecked = form.elements.isSale?.type === "hidden" ? form.elements.isSale.value === "on" : Boolean(form.elements.isSale?.checked);
-  const hasCrop = form.elements.crop?.value && form.elements.crop.value !== "Non affecté";
+  const isSale = form.elements.type && form.elements.type.value === "Recette";
+  const saleChecked = form.elements.isSale && form.elements.isSale.type === "hidden" ? form.elements.isSale.value === "on" : Boolean(form.elements.isSale && form.elements.isSale.checked);
+  const hasCrop = form.elements.crop && form.elements.crop.value && form.elements.crop.value !== "Non affecté";
   const showSaleCheckbox = isSale && hasCrop;
-  const saleCheckboxLabel = form.elements.isSale?.closest("label");
+  const saleCheckboxLabel = form.elements.isSale ? form.elements.isSale.closest("label") : null;
   if (saleCheckboxLabel) {
     saleCheckboxLabel.classList.toggle("sale-fields-hidden", !showSaleCheckbox);
     form.elements.isSale.disabled = !showSaleCheckbox;
@@ -1718,10 +1721,10 @@ function updateFinanceSaleFields() {
   });
   const preview = document.querySelector("#unitPricePreview");
   if (!preview || !showSaleFields) return;
-  const quantity = Number(form.elements.saleQuantity?.value || 0);
-  const salePrice = Number(form.elements.salePrice?.value || 0);
-  const unit = form.elements.saleUnit?.value || "unité";
-  const kgEquivalentLabel = form.elements.saleKgEquivalent?.closest("label");
+  const quantity = Number((form.elements.saleQuantity && form.elements.saleQuantity.value) || 0);
+  const salePrice = Number((form.elements.salePrice && form.elements.salePrice.value) || 0);
+  const unit = (form.elements.saleUnit && form.elements.saleUnit.value) || "unité";
+  const kgEquivalentLabel = form.elements.saleKgEquivalent ? form.elements.saleKgEquivalent.closest("label") : null;
   const needsKgEquivalent = !["kg", "tonnes"].includes(unit);
   if (kgEquivalentLabel) {
     kgEquivalentLabel.classList.toggle("sale-fields-hidden", !showSaleFields || !needsKgEquivalent);
@@ -1730,7 +1733,7 @@ function updateFinanceSaleFields() {
   if (quantity > 0 && salePrice > 0) {
     const calculatedAmount = Math.round(quantity * salePrice);
     form.elements.amount.value = calculatedAmount;
-    const kgQuantity = unit === "kg" ? quantity : unit === "tonnes" ? quantity * 1000 : Number(form.elements.saleKgEquivalent?.value || 0);
+    const kgQuantity = unit === "kg" ? quantity : unit === "tonnes" ? quantity * 1000 : Number((form.elements.saleKgEquivalent && form.elements.saleKgEquivalent.value) || 0);
     const kgText = kgQuantity > 0 ? ` • Prix/kg : ${money(calculatedAmount / kgQuantity)}` : "";
     preview.textContent = `Montant calculé automatiquement : ${money(calculatedAmount)} (${quantity} ${unit} × ${money(salePrice)})${kgText}`;
   } else {
@@ -1777,12 +1780,12 @@ function handleFormSubmit(event) {
     delete data.password;
   }
   if (modalType === "crop") {
-    data.active = Boolean(event.currentTarget.elements.active?.checked);
+    data.active = Boolean(event.currentTarget.elements.active && event.currentTarget.elements.active.checked);
   }
   if (modalType === "task") data.status = taskStatus(data);
   if (data.health) data.health = Number.parseInt(data.health, 10);
   if (modalType === "finance") {
-    data.isSale = event.currentTarget.elements.isSale?.type === "hidden" ? event.currentTarget.elements.isSale.value : event.currentTarget.elements.isSale?.checked ? "on" : "";
+    data.isSale = event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.type === "hidden" ? event.currentTarget.elements.isSale.value : event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.checked ? "on" : "";
     const isSaleWithCrop = data.type === "Recette" && data.isSale && data.crop && data.crop !== "Non affecté";
     if (!isSaleWithCrop) {
       data.saleQuantity = "";

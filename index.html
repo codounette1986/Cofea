@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=60" />
+    <link rel="manifest" href="./manifest.webmanifest?v=61" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=60" />
+    <link rel="stylesheet" href="./styles.css?v=61" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -342,7 +342,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v60";
+        var refreshKey = "agripilot-cache-refresh-v61";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -361,23 +361,31 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=60");
+          window.location.replace("./start.html?v=61");
         });
       })();
     </script>
     <script>
       window.agriPilotLoginReady = false;
+      window.addEventListener("error", function (event) {
+        window.agriPilotStartupError = event.message || "Erreur JavaScript inconnue.";
+        var message = document.querySelector("#loginMessage");
+        if (message) {
+          message.textContent = "Erreur application : " + window.agriPilotStartupError;
+          message.className = "password-message error";
+        }
+      });
       document.addEventListener("submit", function (event) {
         if (!event.target || event.target.id !== "loginForm") return;
         event.preventDefault();
         if (window.agriPilotLoginReady) return;
         var message = document.querySelector("#loginMessage");
         if (message) {
-          message.textContent = "Chargement de l'application en cours. Si ce message reste affiché, le fichier app.js ne se charge pas.";
+          message.textContent = window.agriPilotStartupError ? "Erreur application : " + window.agriPilotStartupError : "Chargement de l'application en cours. Si ce message reste affiché, le fichier app.js ne se charge pas.";
           message.className = "password-message error";
         }
       }, true);
     </script>
-    <script src="./app.js?v=60" defer></script>
+    <script src="./app.js?v=61" defer></script>
   </body>
 </html>
