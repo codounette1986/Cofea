@@ -1860,7 +1860,7 @@ function toggleCrop(id) {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.register("./sw.js").then(() => {
+  navigator.serviceWorker.register("./sw.js?v=56").then(() => {
     renderConnection();
   }).catch(() => {
     renderConnection();
@@ -1868,5 +1868,9 @@ function registerServiceWorker() {
   navigator.serviceWorker.addEventListener("controllerchange", renderConnection);
 }
 
-init();
+try {
+  init();
+} catch (error) {
+  showStartupError(error.message);
+}
 
