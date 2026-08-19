@@ -475,6 +475,16 @@ function supabaseHeaders(extra = {}) {
   };
 }
 
+async function supabaseRequest(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 function remoteTableUrl(table) {
   return `${supabaseConfig.url}/rest/v1/${table}`;
 }
@@ -510,7 +520,7 @@ function setSyncStatus(status, detail) {
 }
 
 async function fetchRemoteMeta() {
-  const response = await fetch(`${remoteTableUrl(supabaseConfig.metaTable)}?id=eq.${encodeURIComponent(supabaseConfig.rowId)}&select=updated_at&limit=1`, {
+  const response = await supabaseRequest(`${remoteTableUrl(supabaseConfig.metaTable)}?id=eq.${encodeURIComponent(supabaseConfig.rowId)}&select=updated_at&limit=1`, {
     headers: supabaseHeaders()
   });
   if (!response.ok) throw new Error(`Lecture Supabase impossible (${response.status})`);
@@ -520,7 +530,7 @@ async function fetchRemoteMeta() {
 
 async function fetchRemoteCollection(collection) {
   const table = supabaseConfig.tables[collection];
-  const response = await fetch(`${remoteTableUrl(table)}?select=id,data,updated_at&order=updated_at.asc`, {
+  const response = await supabaseRequest(`${remoteTableUrl(table)}?select=id,data,updated_at&order=updated_at.asc`, {
     headers: supabaseHeaders()
   });
   if (!response.ok) throw new Error(`Lecture ${table} impossible (${response.status})`);
@@ -550,13 +560,13 @@ async function replaceRemoteCollection(collection) {
     data: item,
     updated_at: state.updatedAt || new Date().toISOString()
   }));
-  const deleteResponse = await fetch(`${remoteTableUrl(table)}?id=neq.__agripilot_never__`, {
+  const deleteResponse = await supabaseRequest(`${remoteTableUrl(table)}?id=neq.__agripilot_never__`, {
     method: "DELETE",
     headers: supabaseHeaders({ Prefer: "return=minimal" })
   });
   if (!deleteResponse.ok) throw new Error(`Nettoyage ${table} impossible (${deleteResponse.status})`);
   if (!rows.length) return;
-  const insertResponse = await fetch(remoteTableUrl(table), {
+  const insertResponse = await supabaseRequest(remoteTableUrl(table), {
     method: "POST",
     headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
     body: JSON.stringify(rows)
@@ -569,7 +579,7 @@ async function saveRemoteMeta() {
     id: supabaseConfig.rowId,
     updated_at: state.updatedAt || new Date().toISOString()
   };
-  const response = await fetch(remoteTableUrl(supabaseConfig.metaTable), {
+  const response = await supabaseRequest(remoteTableUrl(supabaseConfig.metaTable), {
     method: "POST",
     headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
     body: JSON.stringify(payload)
@@ -1859,13 +1869,15 @@ function toggleCrop(id) {
 }
 
 function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.register("./sw.js?v=56").then(() => {
+  if (!("serviceWorker" in navigator)) {
     renderConnection();
-  }).catch(() => {
-    renderConnection();
-  });
-  navigator.serviceWorker.addEventListener("controllerchange", renderConnection);
+    return;
+  }
+  navigator.serviceWorker.getRegistrations()
+    .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+    .then(() => ("caches" in window ? caches.keys() : []))
+    .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+    .finally(renderConnection);
 }
 
 try {
