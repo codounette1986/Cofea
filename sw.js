@@ -1,10 +1,11 @@
-const cacheName = "agripilot-pwa-v54";
+const cacheName = "agripilot-pwa-v55";
 const assets = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
+  "./manifest.webmanifest?v=55",
   "./icons/logo.svg",
   "./icons/icon-192.png",
   "./icons/icon-512.png"

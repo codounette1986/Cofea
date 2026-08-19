@@ -66,13 +66,12 @@ const starterState = {
     { id: crypto.randomUUID(), date: "2026-08-15", label: "Achat compost papayes", crop: "Papayes", type: "Dépense", amount: 38000 }
   ],
   team: [
-    
-    { id: "admin-user", name: "Administrateur", role: "Admin", phone: "", profileId: "admin-profile", login: "admin", password: "admin123" },
-    { id: crypto.randomUUID(), name: "Awa Ndiaye", role: "Responsable irrigation", phone: "77 000 10 20", profileId: "chef-profile", login: "awa", password: "1234" },
-    { id: crypto.randomUUID(), name: "Mamadou Fall", role: "Chef de parcelle", phone: "76 000 30 40", profileId: "terrain-profile", login: "mamadou", password: "1234" },
-    { id: crypto.randomUUID(), name: "Ibrahima Diop", role: "Machiniste", phone: "78 000 50 60", profileId: "terrain-profile", login: "ibrahima", password: "1234" }
+    { id: "admin-user", name: "Administrateur", role: "Admin", phone: "", profileId: "admin-profile", login: "admin", password: "admin123" }
   ]
 };
+
+const retiredDemoUserLogins = new Set(["awa", "mamadou", "ibrahima"]);
+const retiredDemoUserNames = new Set(["awa ndiaye", "mamadou fall", "ibrahima diop"]);
 
 let state = loadState();
 let currentView = "dashboard";
@@ -360,7 +359,9 @@ function loadState() {
     localStorage.removeItem(stateKey);
     return normalizeLoadedState({ ...starterState, dailyTaskTemplates, updatedAt: new Date().toISOString() });
   }
-  const localTeam = teamWithUserAccounts(parsed.team || starterState.team, parsed.userAccounts || userAccountsFromTeam(parsed.team || starterState.team));
+  const sourceTeam = withoutRetiredDemoUsers(parsed.team || starterState.team);
+  const sourceAccounts = withoutRetiredDemoAccounts(parsed.userAccounts || userAccountsFromTeam(sourceTeam));
+  const localTeam = teamWithUserAccounts(sourceTeam, sourceAccounts);
   return {
     ...starterState,
     ...parsed,
@@ -400,6 +401,18 @@ function mergeDefaultTeam(team = []) {
     !existing.some((item) => item.id === person.id || item.login === person.login)
   );
   return [...existing, ...missingDefaults];
+}
+
+function withoutRetiredDemoUsers(team = []) {
+  return team.filter((person) => {
+    const login = String(person.login || "").trim().toLowerCase();
+    const name = String(person.name || "").trim().toLowerCase();
+    return !retiredDemoUserLogins.has(login) && !retiredDemoUserNames.has(name);
+  });
+}
+
+function withoutRetiredDemoAccounts(accounts = []) {
+  return accounts.filter((account) => !retiredDemoUserLogins.has(String(account.login || "").trim().toLowerCase()));
 }
 
 function ensureAdminAccess(team = state.team) {
@@ -471,7 +484,9 @@ function syncedCollections() {
 }
 
 function normalizeLoadedState(data) {
-  const remoteTeam = teamWithUserAccounts(data.team || starterState.team, data.userAccounts || userAccountsFromTeam(data.team || starterState.team));
+  const sourceTeam = withoutRetiredDemoUsers(data.team || starterState.team);
+  const sourceAccounts = withoutRetiredDemoAccounts(data.userAccounts || userAccountsFromTeam(sourceTeam));
+  const remoteTeam = teamWithUserAccounts(sourceTeam, sourceAccounts);
   return {
     ...starterState,
     ...data,
@@ -695,7 +710,6 @@ function bindEvents() {
   document.body.addEventListener("change", handlePeriodInput);
 
   document.querySelector("#loginForm").addEventListener("submit", handleLogin);
-  document.querySelector("#resetAdminBtn")?.addEventListener("click", resetAdminLogin);
   document.querySelector("#quickTaskBtn").addEventListener("click", () => openModal("task"));
   document.querySelector("#logoutBtn").addEventListener("click", logout);
   document.querySelector("#recordForm").addEventListener("submit", handleFormSubmit);
@@ -714,12 +728,12 @@ function currentUser() {
   return state.team.find((person) => person.id === activeUserId) || null;
 }
 
-function showLogin(message = "") {
+function showLogin(message = "", type = "error") {
   document.body.classList.remove("authenticated");
   const loginMessage = document.querySelector("#loginMessage");
   if (loginMessage) {
     loginMessage.textContent = message;
-    loginMessage.className = message ? "password-message error" : "password-message";
+    loginMessage.className = message ? `password-message ${type}` : "password-message";
   }
   const pageTitle = document.querySelector("#pageTitle");
   if (pageTitle) pageTitle.textContent = "Connexion";
@@ -752,15 +766,6 @@ function showApp() {
   }
 }
 
-function openEmergencyAdminSession() {
-  state.team = ensureAdminAccess(state.team);
-  state.userAccounts = userAccountsFromTeam(state.team);
-  activeUserId = "admin-user";
-  localStorage.setItem(authUserKey, activeUserId);
-  saveState({ sync: false });
-  showApp();
-}
-
 async function handleLogin(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -768,7 +773,7 @@ async function handleLogin(event) {
   const password = form.elements.password.value;
   const submitButton = form.querySelector('button[type="submit"]');
   if (submitButton) submitButton.disabled = true;
-  showLogin("Connexion en cours...");
+  showLogin("Connexion en cours...", "success");
   let user = state.team.find((person) => String(person.login || "").trim() === login && String(person.password || "") === password);
   if (!user && login === "admin" && password === "admin123") {
     state.team = ensureAdminAccess(state.team);
@@ -818,15 +823,6 @@ async function loginFromSupabaseAccounts(login, password) {
     setSyncStatus("error", `Connexion Supabase impossible : ${error.message}`);
     return null;
   }
-}
-
-function resetAdminLogin() {
-  state.team = ensureAdminAccess(state.team);
-  state.userAccounts = userAccountsFromTeam(state.team);
-  saveState({ sync: false });
-  activeUserId = "admin-user";
-  localStorage.setItem(authUserKey, activeUserId);
-  showApp();
 }
 
 function logout() {

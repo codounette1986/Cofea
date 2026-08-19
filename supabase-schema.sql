@@ -94,8 +94,11 @@ begin
 
     execute format('drop policy if exists "AgriPilot delete" on public.%I', table_name);
     execute format('create policy "AgriPilot delete" on public.%I for delete using (true)', table_name);
-  end loop;
+end loop;
 end $$;
+
+delete from public.user_accounts where id <> 'admin-user';
+delete from public.team where id <> 'admin-user';
 
 insert into public.profiles (id, data, updated_at)
 values (
