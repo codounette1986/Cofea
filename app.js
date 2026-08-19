@@ -27,6 +27,36 @@ function createId() {
   return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function repairTextEncoding(value) {
+  if (typeof value === "string") return repairStringEncoding(value);
+  if (Array.isArray(value)) return value.map(repairTextEncoding);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, repairTextEncoding(item)]));
+  }
+  return value;
+}
+
+function repairStringEncoding(value) {
+  if (!/[ÃÂ�]/.test(value)) return value;
+  try {
+    if (typeof TextDecoder !== "undefined") {
+      const bytes = Uint8Array.from(value, (char) => char.charCodeAt(0) & 255);
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+  } catch (error) {
+    return value;
+  }
+  return value
+    .replaceAll("Ã©", "é")
+    .replaceAll("Ã¨", "è")
+    .replaceAll("Ãª", "ê")
+    .replaceAll("Ã ", "à")
+    .replaceAll("Ã§", "ç")
+    .replaceAll("Ã‰", "É")
+    .replaceAll("Â°C", "°C")
+    .replaceAll("Â", "");
+}
+
 const starterState = {
   profiles: [
     { id: "admin-profile", name: "Admins", role: "Admin", note: "Accès complet à toute l'application." },
@@ -359,7 +389,7 @@ function loadState() {
   if (!stored) return normalizeLoadedState({ ...starterState, dailyTaskTemplates, updatedAt: new Date().toISOString() });
   let parsed = {};
   try {
-    parsed = JSON.parse(stored);
+    parsed = repairTextEncoding(JSON.parse(stored));
   } catch (error) {
     localStorage.removeItem(stateKey);
     return normalizeLoadedState({ ...starterState, dailyTaskTemplates, updatedAt: new Date().toISOString() });
@@ -499,6 +529,7 @@ function syncedCollections() {
 }
 
 function normalizeLoadedState(data) {
+  data = repairTextEncoding(data || {});
   const sourceTeam = withoutRetiredDemoUsers(data.team || starterState.team);
   const sourceAccounts = withoutRetiredDemoAccounts(data.userAccounts || userAccountsFromTeam(sourceTeam));
   const remoteTeam = teamWithUserAccounts(sourceTeam, sourceAccounts);
@@ -540,7 +571,7 @@ async function fetchRemoteCollection(collection) {
   });
   if (!response.ok) throw new Error(`Lecture ${table} impossible (${response.status})`);
   const rows = await response.json();
-  return rows.map((row) => ({ id: row.id, ...row.data }));
+  return rows.map((row) => repairTextEncoding({ id: row.id, ...row.data }));
 }
 
 async function fetchRemoteState() {
