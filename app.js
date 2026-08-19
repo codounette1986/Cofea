@@ -992,7 +992,7 @@ function renderFields() {
       <div class="progress"><span style="width:${Math.min(field.health, 100)}%"></span></div>
       <p class="field-update">${field.update || "Aucune mise à jour enregistrée pour cette parcelle."}</p>
       <div class="field-harvests">
-        <strong>${harvestSummaryForField(field.name, harvests)}</strong>
+        <strong>${harvestSummaryForField(field.name, state.harvests)}</strong>
         <span class="muted">récolté sur cette parcelle</span>
       </div>
       <div class="card-actions">
