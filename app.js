@@ -347,7 +347,7 @@ const modalConfig = {
       ["name", "Nom complet", "text"],
       ["role", "Rôle", "text"],
       ["phone", "Téléphone", "tel"],
-      ["profileId", "Profil d accès", "profileSelect"],
+      ["profileId", "Profil d'accès", "profileSelect"],
       ["login", "Identifiant", "text"],
       ["password", "Mot de passe", "password"]
     ]

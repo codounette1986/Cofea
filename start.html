@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=65" />
+    <link rel="manifest" href="./manifest.webmanifest?v=66" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=65" />
+    <link rel="stylesheet" href="./styles.css?v=66" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -28,7 +28,7 @@
         </div>
         <div>
           <h1 id="loginTitle">Connexion</h1>
-          <p>AccÃ©dez Ã  votre espace selon votre profil.</p>
+          <p>Accédez à votre espace selon votre profil.</p>
         </div>
         <label>Identifiant<input name="login" type="text" required autocomplete="username" /></label>
         <label>Mot de passe<input name="password" type="password" required autocomplete="current-password" /></label>
@@ -50,7 +50,7 @@
           <span class="status-dot" id="statusDot"></span>
           <div>
             <strong id="statusText">Mode local</strong>
-            <span id="statusDetail">DonnÃ©es sauvegardÃ©es sur cet appareil</span>
+            <span id="statusDetail">Données sauvegardées sur cet appareil</span>
           </div>
           <button class="sync-button" id="syncNowBtn" type="button">Synchroniser</button>
         </div>
@@ -63,21 +63,21 @@
           </div>
           <div class="top-actions">
             <button class="text-button" id="changePasswordBtn">Changer mot de passe</button>
-            <button class="text-button" id="logoutBtn">DÃ©connexion</button>
-            <button class="primary-button" id="quickTaskBtn">Nouvelle tÃ¢che</button>
+            <button class="text-button" id="logoutBtn">Déconnexion</button>
+            <button class="primary-button" id="quickTaskBtn">Nouvelle tâche</button>
           </div>
         </header>
 
         <section class="view active" id="dashboardView" aria-labelledby="pageTitle">
           <section class="panel dashboard-weather-top">
             <div class="panel-head">
-              <h2>MÃ©tÃ©o agricole</h2>
+              <h2>Météo agricole</h2>
               <span class="pill">Dakar</span>
             </div>
             <div class="weather-card">
-              <strong>31Â°C</strong>
+              <strong>31°C</strong>
               <span>Vent NE 14 km/h</span>
-              <p>Arrosage conseillÃ© tÃ´t le matin. Risque de chaleur sur les jeunes plants.</p>
+              <p>Arrosage conseillé tôt le matin. Risque de chaleur sur les jeunes plants.</p>
             </div>
           </section>
           <div class="kpi-grid" id="kpiGrid"></div>
@@ -92,7 +92,7 @@
             <section class="panel span-2">
               <div class="panel-head">
                 <h2>Parcelles</h2>
-                <button class="text-button" data-target="fields">GÃ©rer</button>
+                <button class="text-button" data-target="fields">Gérer</button>
               </div>
               <div class="field-strip" id="fieldStrip"></div>
             </section>
@@ -105,15 +105,15 @@
             </section>
             <section class="panel span-2">
               <div class="panel-head">
-                <h2>RÃ©coltes par culture active</h2>
-                <button class="text-button" data-target="harvests">DÃ©tails</button>
+                <h2>Récoltes par culture active</h2>
+                <button class="text-button" data-target="harvests">Détails</button>
               </div>
               <div class="culture-harvests" id="cultureHarvests"></div>
             </section>
             <section class="panel">
               <div class="panel-head">
                 <h2>Revenus</h2>
-                <button class="text-button" data-target="finance" id="revenueDetailsBtn">DÃ©tails</button>
+                <button class="text-button" data-target="finance" id="revenueDetailsBtn">Détails</button>
               </div>
               <div class="revenue-card" id="revenueCard"></div>
             </section>
@@ -140,17 +140,17 @@
           <div class="section-head">
             <h2>Planning des travaux</h2>
             <div class="section-actions">
-              <button class="text-button" id="generateDailyTasksBtn">CrÃ©er les tÃ¢ches du jour</button>
-              <button class="primary-button" data-modal="task">Ajouter une tÃ¢che</button></div>
+              <button class="text-button" id="generateDailyTasksBtn">Créer les tâches du jour</button>
+              <button class="primary-button" data-modal="task">Ajouter une tâche</button></div>
           </div>
           <div class="panel daily-task-panel">
             <div class="panel-head">
-              <h2>TÃ¢ches quotidiennes de base</h2>
-              <button class="text-button" data-modal="baseTask" id="addBaseTaskBtn">Ajouter une tÃ¢che de base</button>
+              <h2>Tâches quotidiennes de base</h2>
+              <button class="text-button" data-modal="baseTask" id="addBaseTaskBtn">Ajouter une tâche de base</button>
             </div>
             <div class="daily-task-grid" id="dailyTaskBase"></div>
           </div>
-          <div class="period-filter" id="taskPeriodFilters"><label>Du<input type="date" data-period-key="tasks" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="tasks" data-period-bound="to" /></label><button class="text-button" data-period-reset="tasks">RÃ©initialiser</button></div>
+          <div class="period-filter" id="taskPeriodFilters"><label>Du<input type="date" data-period-key="tasks" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="tasks" data-period-bound="to" /></label><button class="text-button" data-period-reset="tasks">Réinitialiser</button></div>
           <div class="filter-bar" id="taskFilters"></div>
           <div class="table-wrap">
             <table>
@@ -159,7 +159,7 @@
                   <th>Travail</th>
                   <th>Parcelle</th>
                   <th>Responsable</th>
-                  <th>Ã‰chÃ©ance</th>
+                  <th>Échéance</th>
                   <th>Statut</th>
                   <th>Actions</th>
                 </tr>
@@ -171,13 +171,13 @@
 
         <section class="view" id="harvestsView">
           <div class="section-head">
-            <h2>RÃ©coltes par parcelle</h2>
-            <button class="primary-button" data-modal="harvest">Ajouter une rÃ©colte</button>
+            <h2>Récoltes par parcelle</h2>
+            <button class="primary-button" data-modal="harvest">Ajouter une récolte</button>
           </div>
-          <div class="period-filter" id="harvestPeriodFilters"><label>Du<input type="date" data-period-key="harvests" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="harvests" data-period-bound="to" /></label><button class="text-button" data-period-reset="harvests">RÃ©initialiser</button></div>
+          <div class="period-filter" id="harvestPeriodFilters"><label>Du<input type="date" data-period-key="harvests" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="harvests" data-period-bound="to" /></label><button class="text-button" data-period-reset="harvests">Réinitialiser</button></div>
           <div class="harvest-layout">
             <div class="panel">
-              <h2>RÃ©sumÃ© par parcelle</h2>
+              <h2>Résumé par parcelle</h2>
               <div class="harvest-summary" id="harvestSummary"></div>
             </div>
             <div class="table-wrap panel">
@@ -187,8 +187,8 @@
                     <th>Date</th>
                     <th>Parcelle</th>
                     <th>Culture</th>
-                    <th>QuantitÃ©</th>
-                    <th>QualitÃ©</th>
+                    <th>Quantité</th>
+                    <th>Qualité</th>
                     <th>Destination</th>
                     <th>Actions</th>
                   </tr>
@@ -210,12 +210,12 @@
         <section class="view" id="financeView">
           <div class="section-head">
             <h2>Finances</h2>
-            <button class="primary-button" data-modal="finance">Ajouter une opÃ©ration</button>
+            <button class="primary-button" data-modal="finance">Ajouter une opération</button>
           </div>
-          <div class="period-filter" id="financePeriodFilters"><label>Du<input type="date" data-period-key="finance" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="finance" data-period-bound="to" /></label><button class="text-button" data-period-reset="finance">RÃ©initialiser</button></div>
+          <div class="period-filter" id="financePeriodFilters"><label>Du<input type="date" data-period-key="finance" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="finance" data-period-bound="to" /></label><button class="text-button" data-period-reset="finance">Réinitialiser</button></div>
           <div class="finance-layout">
             <div class="panel">
-              <h2>RÃ©sumÃ©</h2>
+              <h2>Résumé</h2>
               <div class="finance-summary" id="financeSummary"></div>
             </div>
             <div class="table-wrap panel">
@@ -223,7 +223,7 @@
                 <thead>
                   <tr>
                     <th>Date</th>
-                    <th>LibellÃ©</th>
+                    <th>Libellé</th>
                     <th>Culture</th>
                     <th>Type</th>
                     <th>Montant</th>
@@ -236,14 +236,14 @@
           </div>
           <div class="table-wrap panel finance-by-crop">
             <div class="panel-head">
-              <h2>Recettes et dÃ©penses par culture</h2>
+              <h2>Recettes et dépenses par culture</h2>
             </div>
             <table>
               <thead>
                 <tr>
                   <th>Culture</th>
                   <th>Recettes</th>
-                  <th>DÃ©penses</th>
+                  <th>Dépenses</th>
                   <th>Solde</th>
                 </tr>
               </thead>
@@ -257,7 +257,7 @@
             <h2>Prix de vente des cultures</h2>
             <button class="primary-button" data-modal="sale">Ajouter une vente</button>
           </div>
-          <div class="period-filter" id="pricePeriodFilters"><label>Du<input type="date" data-period-key="prices" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="prices" data-period-bound="to" /></label><button class="text-button" data-period-reset="prices">RÃ©initialiser</button></div>
+          <div class="period-filter" id="pricePeriodFilters"><label>Du<input type="date" data-period-key="prices" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="prices" data-period-bound="to" /></label><button class="text-button" data-period-reset="prices">Réinitialiser</button></div>
           <div class="price-layout">
             <div class="panel">
               <h2>Culture</h2>
@@ -266,7 +266,7 @@
             </div>
             <div class="panel">
               <div class="panel-head">
-                <h2>Ã‰volution du prix unitaire</h2>
+                <h2>Évolution du prix unitaire</h2>
               </div>
               <div class="price-chart" id="priceChart"></div>
             </div>
@@ -278,7 +278,7 @@
                   <th>Date</th>
                   <th>Culture</th>
                   <th>Vente</th>
-                  <th>QuantitÃ©</th>
+                  <th>Quantité</th>
                   <th>Prix unitaire</th>
                 </tr>
               </thead>
@@ -289,7 +289,7 @@
 
         <section class="view" id="profilesView">
           <div class="section-head">
-            <h2>Profils d'accÃ¨s</h2>
+            <h2>Profils d'accès</h2>
             <button class="primary-button" data-modal="profile">Ajouter un profil</button>
           </div>
           <div class="record-grid" id="profilesGrid"></div>
@@ -297,7 +297,7 @@
 
         <section class="view" id="teamView">
           <div class="section-head">
-            <h2>Ã‰quipe et responsabilitÃ©s</h2>
+            <h2>Équipe et responsabilités</h2>
             <button class="primary-button" data-modal="team">Ajouter une personne</button>
           </div>
           <div class="record-grid" id="teamGrid"></div>
@@ -335,14 +335,14 @@
         </div>
         <menu class="modal-actions">
           <button value="cancel">Annuler</button>
-          <button class="primary-button" value="default">Mettre Ã  jour</button>
+          <button class="primary-button" value="default">Mettre à jour</button>
         </menu>
       </form>
     </dialog>
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v65";
+        var refreshKey = "agripilot-cache-refresh-v66";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -361,7 +361,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=65");
+          window.location.replace("./start.html?v=66");
         });
       })();
     </script>
@@ -381,11 +381,11 @@
         if (window.agriPilotLoginReady) return;
         var message = document.querySelector("#loginMessage");
         if (message) {
-          message.textContent = window.agriPilotStartupError ? "Erreur application : " + window.agriPilotStartupError : "Chargement de l'application en cours. Si ce message reste affichÃ©, le fichier app.js ne se charge pas.";
+          message.textContent = window.agriPilotStartupError ? "Erreur application : " + window.agriPilotStartupError : "Chargement de l'application en cours. Si ce message reste affiché, le fichier app.js ne se charge pas.";
           message.className = "password-message error";
         }
       }, true);
     </script>
-    <script src="./app.js?v=65" defer></script>
+    <script src="./app.js?v=66" defer></script>
   </body>
 </html>
