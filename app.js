@@ -66,10 +66,10 @@ const starterState = {
     { id: "terrain-profile", name: "Équipe terrain", role: "Terrain", note: "Accès terrain. Finances et revenus masqués." }
   ],
   fields: [
-    { id: createId(), name: "Serre 1", crop: "Poivrons", area: 0.6, stage: "Floraison", health: 84, mode: "Serre", update: "Plants vigoureux, floraison régulière. Surveiller l'humidité en fin de journée." },
-    { id: createId(), name: "Serre 2", crop: "Piment", area: 0.4, stage: "Fructification", health: 78, mode: "Serre", update: "Quelques feuilles marquées, contrôle thrips à refaire après arrosage." },
-    { id: createId(), name: "Plein champ Nord", crop: "Papayes", area: 2.8, stage: "Croissance", health: 88, mode: "Plein champ", update: "Bonne reprise après paillage, croissance homogène." },
-    { id: createId(), name: "Plein champ Sud", crop: "Piment", area: 1.7, stage: "Reprise", health: 71, mode: "Plein champ", update: "Reprise correcte mais stress hydrique visible sur quelques lignes." }
+    { id: createId(), name: "Serre 1", crop: "Poivrons", active: true, area: 0.6, stage: "Floraison", health: 84, mode: "Serre", update: "Plants vigoureux, floraison régulière. Surveiller l'humidité en fin de journée." },
+    { id: createId(), name: "Serre 2", crop: "Piment", active: true, area: 0.4, stage: "Fructification", health: 78, mode: "Serre", update: "Quelques feuilles marquées, contrôle thrips à refaire après arrosage." },
+    { id: createId(), name: "Plein champ Nord", crop: "Papayes", active: true, area: 2.8, stage: "Croissance", health: 88, mode: "Plein champ", update: "Bonne reprise après paillage, croissance homogène." },
+    { id: createId(), name: "Plein champ Sud", crop: "Piment", active: true, area: 1.7, stage: "Reprise", health: 71, mode: "Plein champ", update: "Reprise correcte mais stress hydrique visible sur quelques lignes." }
   ],
   tasks: [
     { id: createId(), title: "Contrôle goutte-à-goutte", field: "Serre 1", owner: "Awa", due: "2026-08-18", status: "En cours" },
@@ -290,6 +290,7 @@ const modalConfig = {
       ["name", "Nom", "text"],
       ["crop", "Culture", "cropSelect"],
       ["area", "Surface (ha)", "number"],
+      ["active", "Parcelle active", "checkbox"],
       ["stage", "Stade", "select", cropStages],
       ["health", "Santé de la parcelle", "select", healthRanges],
       ["mode", "Mode", "select", ["Plein champ", "Serre"]],
@@ -737,6 +738,7 @@ function bindEvents() {
     const deleteButton = event.target.closest("[data-delete]");
     const editButton = event.target.closest("[data-edit]");
     const completeButton = event.target.closest("[data-complete]");
+    const toggleFieldButton = event.target.closest("[data-toggle-field]");
     const toggleCropButton = event.target.closest("[data-toggle-crop]");
     const dailyTasksButton = event.target.closest("#generateDailyTasksBtn");
     const periodResetButton = event.target.closest("[data-period-reset]");
@@ -746,6 +748,7 @@ function bindEvents() {
     if (editButton) openModal(editButton.dataset.type, editButton.dataset.edit);
     if (deleteButton) deleteRecord(deleteButton.dataset.collection, deleteButton.dataset.delete);
     if (completeButton) completeTask(completeButton.dataset.complete);
+    if (toggleFieldButton) toggleField(toggleFieldButton.dataset.toggleField);
     if (toggleCropButton) toggleCrop(toggleCropButton.dataset.toggleCrop);
     if (dailyTasksButton) generateDailyTasks();
     if (periodResetButton) resetPeriodFilter(periodResetButton.dataset.periodReset);
@@ -953,10 +956,11 @@ function renderDashboard() {
   const expenses = state.finance.filter((item) => item.type === "Dépense").reduce((sum, item) => sum + Number(item.amount), 0);
   const revenues = state.finance.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
   const lateTasks = state.tasks.filter((task) => task.status === "En retard").length;
-  const area = state.fields.reduce((sum, field) => sum + Number(field.area), 0);
+  const activeFields = state.fields.filter(isFieldActive);
+  const area = activeFields.reduce((sum, field) => sum + Number(field.area), 0);
   const harvestWeight = state.harvests.filter((harvest) => harvest.unit === "kg").reduce((sum, harvest) => sum + Number(harvest.quantity), 0);
   const kpis = [
-    ["Surface suivie", `${area.toFixed(1)} ha`],
+    ["Surface active", formatArea(area)],
     ["Travaux ouverts", state.tasks.filter((task) => task.status !== "Terminé").length],
     ["Récoltes kg", `${harvestWeight} kg`],
     canSeeFinance() ? ["Solde estimé", money(revenues - expenses)] : ["Profil actif", currentProfile().role]
@@ -965,7 +969,7 @@ function renderDashboard() {
     <article class="kpi"><span>${label}</span><strong>${value}</strong></article>
   `).join("");
   document.querySelector("#priorityTasks").innerHTML = state.tasks.slice(0, 4).map(taskItem).join("");
-  document.querySelector("#fieldStrip").innerHTML = state.fields.slice(0, 3).map(fieldMini).join("");
+  document.querySelector("#fieldStrip").innerHTML = activeFields.slice(0, 3).map(fieldMini).join("");
   document.querySelector("#stockAlerts").innerHTML = lowStock().map((stock) => `
     <div class="stock-alert"><div><strong>${stock.item}</strong><span class="muted">${stock.quantity} ${stock.unit} restant</span></div><span class="status-pill late">Bas</span></div>
   `).join("") || `<p class="muted">Aucune alerte de stock.</p>`;
@@ -1017,8 +1021,9 @@ function renderFields() {
   document.querySelector("#fieldsGrid").innerHTML = state.fields.map((field) => `
     <article class="record-card">
       <strong>${field.name}</strong>
-      <span class="muted">${field.crop} · ${field.area} ha · ${field.mode || "Plein champ"}</span>
+      <span class="muted">${field.crop} · ${formatArea(field.area)} · ${field.mode || "Plein champ"}</span>
       <div class="record-meta">
+        <span class="${isFieldActive(field) ? "status-pill done" : "status-pill late"}">${isFieldActive(field) ? "Active" : "Inactive"}</span>
         <span class="pill">${field.stage}</span>
         <span class="pill">${field.mode || "Plein champ"}</span>
         <span class="pill">${field.health}% santé</span>
@@ -1030,6 +1035,7 @@ function renderFields() {
         <span class="muted">récolté sur cette parcelle</span>
       </div>
       <div class="card-actions">
+        <button data-toggle-field="${field.id}">${isFieldActive(field) ? "Désactiver" : "Activer"}</button>
         <button data-edit="${field.id}" data-type="field">Modifier</button>
         <button data-delete="${field.id}" data-collection="fields">Supprimer</button>
       </div>
@@ -1110,6 +1116,20 @@ function dateInPeriod(dateValue, key) {
   return (!filter.from || dateValue >= filter.from) && (!filter.to || dateValue <= filter.to);
 }
 
+function isFieldActive(field) {
+  return !field || field.active !== false;
+}
+
+function activeFields() {
+  return state.fields.filter(isFieldActive);
+}
+
+function formatArea(value) {
+  const area = Number(value || 0);
+  if (area > 0 && area < 0.1) return `${Math.round(area * 10000)} m² (${area.toFixed(2).replace(".", ",")} ha)`;
+  return `${area.toLocaleString("fr-FR", { minimumFractionDigits: area % 1 ? 2 : 0, maximumFractionDigits: 2 })} ha`;
+}
+
 function updatePeriodFilter(key, bound, value) {
   if (!periodFilters[key]) return;
   periodFilters[key][bound] = value;
@@ -1155,7 +1175,7 @@ function dailyTasksForField(field) {
 function generateDailyTasks() {
   const due = currentDateValue();
   const existingKeys = new Set(state.tasks.map((task) => `${task.title}|${task.field}|${task.due}`));
-  const tasksToAdd = state.fields.flatMap(dailyTasksForField).filter((task) => {
+  const tasksToAdd = activeFields().flatMap(dailyTasksForField).filter((task) => {
     const key = `${task.title}|${task.field}|${due}`;
     return !existingKeys.has(key);
   });
@@ -1174,7 +1194,7 @@ function generateDailyTasks() {
 }
 function renderHarvests() {
   const harvestRecords = state.harvests.filter((harvest) => dateInPeriod(harvest.date, "harvests"));
-  document.querySelector("#harvestSummary").innerHTML = state.fields.map((field) => `
+  document.querySelector("#harvestSummary").innerHTML = activeFields().map((field) => `
     <div class="summary-line">
       <span>${field.name}</span>
       <strong>${harvestSummaryForField(field.name, harvestRecords)}</strong>
@@ -1357,7 +1377,7 @@ function harvestSummaryForField(fieldName, sourceHarvests) {
 }
 
 function harvestByActiveCrop() {
-  const activeCrops = [...new Set(state.fields.map((field) => field.crop).filter(isCropActive))];
+  const activeCrops = [...new Set(activeFields().map((field) => field.crop).filter(isCropActive))];
   return activeCrops.map((crop) => {
     const cropHarvests = state.harvests.filter((harvest) => harvest.crop === crop);
     const totals = cropHarvests.reduce((summary, harvest) => {
@@ -1369,7 +1389,7 @@ function harvestByActiveCrop() {
       : "0";
     return {
       crop,
-      fields: state.fields.filter((field) => field.crop === crop).length,
+      fields: activeFields().filter((field) => field.crop === crop).length,
       total
     };
   });
@@ -1386,6 +1406,11 @@ function cropOptions(currentValue = "") {
     .filter((crop) => crop.active !== false || currentValues.includes(crop.name))
     .map((crop) => crop.name);
   return [...new Set(names)];
+}
+
+function fieldOptionsForSelect(currentValue = "") {
+  const names = activeFields().map((field) => field.name);
+  return [...new Set([...names, currentValue].filter(Boolean))];
 }
 
 function financeByCrop(records = state.finance) {
@@ -1576,6 +1601,7 @@ function applySectionAccess() {
     ["#priceSalesTable", "prices:sales"],
     ['#pricesView [data-modal="sale"]', "prices:form"],
     ['[data-edit][data-type="field"]', "fields:form"],
+    ['[data-toggle-field]', "fields:form"],
     ['[data-delete][data-collection="fields"]', "fields:form"],
     ['[data-edit][data-type="crop"]', "crops:form"],
     ['[data-toggle-crop]', "crops:form"],
@@ -1659,7 +1685,7 @@ function openModal(type, id = null) {
       return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option.label, value, option.value)).join("")}</select></label>`;
     }
     if (typeName === "fieldSelect") {
-      const fieldOptions = state.fields.map((field) => field.name);
+      const fieldOptions = fieldOptionsForSelect(value);
       return `<label>${label}<select name="${name}" required>${fieldOptions.map((option) => optionTag(option, value)).join("")}</select></label>`;
     }
     if (typeName === "cropSelect") {
@@ -1678,12 +1704,15 @@ function openModal(type, id = null) {
       return `<label class="wide-field">${label}<textarea name="${name}" rows="4" placeholder="Exemple : feuilles jaunies sur 2 lignes, arrosage renforcé, plants en bonne reprise...">${safeValue}</textarea></label>`;
     }
     if (typeName === "checkbox") {
-      const checked = modalType === "crop" && name === "active" ? !record || record.active !== false : Boolean(value);
+      const checked = name === "active" ? !record || record.active !== false : Boolean(value);
       return `<label class="checkbox-field">${label}<input name="${name}" type="checkbox" ${checked ? "checked" : ""} /></label>`;
     }
     if (typeName === "select") {
       const saleFieldClass = name === "saleUnit" ? "sale-field" : "";
       return `<label class="${saleFieldClass}">${label}<select name="${name}" ${name === "saleUnit" ? "" : "required"}>${options.map((option) => optionTag(option, value)).join("")}</select></label>`;
+    }
+    if (modalType === "field" && name === "area") {
+      return `<label>${label}<input name="${name}" type="number" value="${safeValue}" min="0" max="3" step="0.01" required /><span class="field-hint">De 0 à 3 ha. Exemple : 300 m² = 0,03 ha.</span></label>`;
     }
     const optionalSaleField = ["saleQuantity", "salePrice", "saleUnit", "saleKgEquivalent"].includes(name);
     return `<label class="${optionalSaleField ? "sale-field" : ""}">${label}<input name="${name}" type="${typeName}" value="${safeValue}" ${optionalSaleField ? "" : "required"} /></label>`;
@@ -1817,6 +1846,10 @@ function handleFormSubmit(event) {
   if (modalType === "crop") {
     data.active = Boolean(event.currentTarget.elements.active && event.currentTarget.elements.active.checked);
   }
+  if (modalType === "field") {
+    data.active = Boolean(event.currentTarget.elements.active && event.currentTarget.elements.active.checked);
+    data.area = Math.max(0, Math.min(3, Number(data.area || 0)));
+  }
   if (modalType === "task") data.status = taskStatus(data);
   if (data.health) data.health = Number.parseInt(data.health, 10);
   if (modalType === "finance") {
@@ -1907,6 +1940,14 @@ function deleteRecord(collection, id) {
 
 function completeTask(id) {
   state.tasks = state.tasks.map((task) => task.id === id ? { ...task, status: "Terminé" } : task);
+  saveState();
+  render();
+}
+
+function toggleField(id) {
+  state.fields = state.fields.map((field) =>
+    field.id === id ? { ...field, active: field.active === false } : field
+  );
   saveState();
   render();
 }
