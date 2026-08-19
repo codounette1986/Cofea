@@ -453,8 +453,9 @@ function withoutRetiredDemoAccounts(accounts = []) {
 
 function ensureAdminAccess(team = state.team) {
   const defaultAdmin = starterState.team.find((person) => person.id === "admin-user");
+  const existingAdmin = team.find((person) => person.id === "admin-user" || person.login === "admin");
   const withoutDuplicateAdmin = team.filter((person) => person.id !== "admin-user" && person.login !== "admin");
-  return [{ ...defaultAdmin }, ...withoutDuplicateAdmin];
+  return [{ ...defaultAdmin, ...existingAdmin, id: "admin-user", login: "admin", profileId: "admin-profile" }, ...withoutDuplicateAdmin];
 }
 
 function userAccountsFromTeam(team = []) {
@@ -836,11 +837,6 @@ async function handleLogin(event) {
   if (submitButton) submitButton.disabled = true;
   showLogin("Connexion en cours...", "success");
   let user = state.team.find((person) => String(person.login || "").trim() === login && String(person.password || "") === password);
-  if (!user && login === "admin" && password === "admin123") {
-    state.team = ensureAdminAccess(state.team);
-    saveState({ sync: false });
-    user = state.team.find((person) => person.id === "admin-user");
-  }
   if (!user) {
     user = await loginFromSupabaseAccounts(login, password);
   }
@@ -1915,10 +1911,11 @@ function handlePasswordSubmit(event) {
     member.id === person.id ? { ...member, password: newPassword } : member
   );
   saveState();
-  showPasswordMessage("Mot de passe mis à jour.", "success");
+  showPasswordMessage("Mot de passe mis à jour. Reconnectez-vous avec le nouveau mot de passe.", "success");
   window.setTimeout(() => {
     form.reset();
     document.querySelector("#passwordModal").close();
+    logout();
   }, 800);
 }
 
