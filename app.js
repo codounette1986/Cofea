@@ -65,41 +65,12 @@ const starterState = {
     { id: "comptable-profile", name: "Comptable", role: "Comptable", note: "Accès aux finances, revenus et dépenses." },
     { id: "terrain-profile", name: "Équipe terrain", role: "Terrain", note: "Accès terrain. Finances et revenus masqués." }
   ],
-  fields: [
-    { id: createId(), name: "Serre 1", crop: "Poivrons", active: true, area: 0.6, stage: "Floraison", health: 84, mode: "Serre", update: "Plants vigoureux, floraison régulière. Surveiller l'humidité en fin de journée." },
-    { id: createId(), name: "Serre 2", crop: "Piment", active: true, area: 0.4, stage: "Fructification", health: 78, mode: "Serre", update: "Quelques feuilles marquées, contrôle thrips à refaire après arrosage." },
-    { id: createId(), name: "Plein champ Nord", crop: "Papayes", active: true, area: 2.8, stage: "Croissance", health: 88, mode: "Plein champ", update: "Bonne reprise après paillage, croissance homogène." },
-    { id: createId(), name: "Plein champ Sud", crop: "Piment", active: true, area: 1.7, stage: "Reprise", health: 71, mode: "Plein champ", update: "Reprise correcte mais stress hydrique visible sur quelques lignes." }
-  ],
-  tasks: [
-    { id: createId(), title: "Contrôle goutte-à-goutte", field: "Serre 1", owner: "Awa", due: "2026-08-18", status: "En cours" },
-    { id: createId(), title: "Tuteurage des poivrons", field: "Serre 1", owner: "Mamadou", due: "2026-08-19", status: "À faire" },
-    { id: createId(), title: "Surveillance thrips et acariens", field: "Serre 2", owner: "Ibrahima", due: "2026-08-17", status: "En retard" },
-    { id: createId(), title: "Paillage papayers", field: "Plein champ Nord", owner: "Awa", due: "2026-08-22", status: "À faire" },
-    { id: createId(), title: "Désherbage plein champ", field: "Plein champ Sud", owner: "Mamadou", due: "2026-08-20", status: "À faire" }
-  ],
-  harvests: [
-    { id: createId(), date: "2026-08-10", field: "Serre 2", crop: "Piment", quantity: 64, unit: "kg", quality: "Très bonne", destination: "Vente marché" },
-    { id: createId(), date: "2026-08-13", field: "Serre 1", crop: "Poivrons", quantity: 48, unit: "kg", quality: "Bonne", destination: "Commande restaurant" },
-    { id: createId(), date: "2026-08-15", field: "Plein champ Nord", crop: "Papayes", quantity: 32, unit: "pièces", quality: "À trier", destination: "Stock ferme" }
-  ],
-  crops: [
-    { id: createId(), name: "Poivrons", active: true, family: "Solanacées", cycle: "90 à 120 jours", water: "Régulier, sans excès", spacing: "50 x 50 cm", notes: "Surveiller les thrips, acariens et coups de chaleur en serre." },
-    { id: createId(), name: "Piment", active: true, family: "Solanacées", cycle: "100 à 150 jours", water: "Modéré et fréquent", spacing: "50 x 60 cm", notes: "Récoltes échelonnées. Bien suivre floraison, nouaison et attaques d'insectes." },
-    { id: createId(), name: "Papayes", active: true, family: "Caricacées", cycle: "8 à 12 mois avant production", water: "Profond et régulier", spacing: "2,5 x 2,5 m", notes: "Éviter l'eau stagnante. Paillage utile en plein champ." }
-  ],
-  stock: [
-    { id: createId(), item: "Semences poivron", category: "Semences", quantity: 8, unit: "sachets", threshold: 4 },
-    { id: createId(), item: "Plants papayer", category: "Plantation", quantity: 120, unit: "plants", threshold: 60 },
-    { id: createId(), item: "Compost", category: "Fertilisation", quantity: 1.6, unit: "t", threshold: 2 },
-    { id: createId(), item: "Film serre", category: "Serre", quantity: 2, unit: "rouleaux", threshold: 1 }
-  ],
-  finance: [
-    { id: createId(), date: "2026-08-12", label: "Vente piment frais", crop: "Piment", type: "Recette", amount: 185000, isSale: "on", saleQuantity: 64, salePrice: 2890.625, saleUnit: "kg" },
-    { id: createId(), date: "2026-08-13", label: "Vente poivrons restaurant", crop: "Poivrons", type: "Recette", amount: 144000, isSale: "on", saleQuantity: 48, salePrice: 3000, saleUnit: "kg" },
-    { id: createId(), date: "2026-08-14", label: "Main d'oeuvre serre", crop: "Poivrons", type: "Dépense", amount: 42000 },
-    { id: createId(), date: "2026-08-15", label: "Achat compost papayes", crop: "Papayes", type: "Dépense", amount: 38000 }
-  ],
+  fields: [],
+  tasks: [],
+  harvests: [],
+  crops: [],
+  stock: [],
+  finance: [],
   team: [
     { id: "admin-user", name: "Administrateur", role: "Admin", phone: "", profileId: "admin-profile", login: "admin", password: "admin123" }
   ]
@@ -107,6 +78,13 @@ const starterState = {
 
 const retiredDemoUserLogins = new Set(["awa", "mamadou", "ibrahima"]);
 const retiredDemoUserNames = new Set(["awa ndiaye", "mamadou fall", "ibrahima diop"]);
+const retiredStarterExamples = {
+  fields: new Set(["Serre 1|Poivrons|0.6|Serre", "Serre 2|Piment|0.4|Serre", "Plein champ Nord|Papayes|2.8|Plein champ", "Plein champ Sud|Piment|1.7|Plein champ"]),
+  tasks: new Set(["Contrôle goutte-à-goutte|Serre 1|Awa|2026-08-18", "Tuteurage des poivrons|Serre 1|Mamadou|2026-08-19", "Surveillance thrips et acariens|Serre 2|Ibrahima|2026-08-17", "Paillage papayers|Plein champ Nord|Awa|2026-08-22", "Désherbage plein champ|Plein champ Sud|Mamadou|2026-08-20"]),
+  harvests: new Set(["2026-08-10|Serre 2|Piment|64", "2026-08-13|Serre 1|Poivrons|48", "2026-08-15|Plein champ Nord|Papayes|32"]),
+  stock: new Set(["Semences poivron|Semences|8", "Plants papayer|Plantation|120", "Compost|Fertilisation|1.6", "Film serre|Serre|2"]),
+  finance: new Set(["2026-08-12|Vente piment frais|Piment|185000", "2026-08-13|Vente poivrons restaurant|Poivrons|144000", "2026-08-14|Main d'oeuvre serre|Poivrons|42000", "2026-08-15|Achat compost papayes|Papayes|38000"])
+};
 
 let state;
 let currentView = "dashboard";
@@ -181,44 +159,7 @@ const defaultPagesByRole = {
   Terrain: ["dashboard", "fields", "tasks", "harvests", "stock", "team"]
 };
 
-const dailyTaskTemplates = [
-  {
-    title: "Contrôle irrigation",
-    crops: ["Poivrons", "Piment", "Papayes"],
-    note: "Vérifier goutte-à-goutte, pression, fuites, zones sèches et réserve d'eau."
-  },
-  {
-    title: "Observation ravageurs",
-    crops: ["Poivrons", "Piment"],
-    note: "Surveiller thrips, pucerons, acariens, mouches blanches et dessous des feuilles."
-  },
-  {
-    title: "Aération et chaleur serre",
-    crops: ["Poivrons", "Piment"],
-    modes: ["Serre"],
-    note: "Ouvrir/aérer si nécessaire et surveiller les coups de chaleur."
-  },
-  {
-    title: "Contrôle floraison et fruits",
-    crops: ["Poivrons", "Piment", "Papayes"],
-    note: "Observer chute de fleurs, fruits abîmés, nouaison et maturité."
-  },
-  {
-    title: "Nettoyage sanitaire",
-    crops: ["Poivrons", "Piment", "Papayes"],
-    note: "Retirer feuilles ou fruits malades et noter les zones touchées."
-  },
-  {
-    title: "Récolte fruits mûrs",
-    crops: ["Poivrons", "Piment", "Papayes"],
-    note: "Cueillir les fruits prêts selon les commandes et la maturité."
-  },
-  {
-    title: "Contrôle stress hydrique papaye",
-    crops: ["Papayes"],
-    note: "Vérifier flétrissement, paillage, humidité du sol et fruits trop mûrs."
-  }
-];
+const dailyTaskTemplates = [];
 const accessSections = {
   dashboard: [
     { id: "dashboard:kpis", label: "Indicateurs" },
@@ -387,32 +328,69 @@ const modalConfig = {
 
 function loadState() {
   const stored = localStorage.getItem(stateKey);
-  if (!stored) return normalizeLoadedState({ ...starterState, dailyTaskTemplates, updatedAt: new Date().toISOString() });
+  if (!stored) return createInitialState();
   let parsed = {};
   try {
     parsed = repairTextEncoding(JSON.parse(stored));
   } catch (error) {
     localStorage.removeItem(stateKey);
-    return normalizeLoadedState({ ...starterState, dailyTaskTemplates, updatedAt: new Date().toISOString() });
+    return createInitialState();
   }
+  parsed = withoutStarterExamples(parsed);
   const sourceTeam = withoutRetiredDemoUsers(parsed.team || starterState.team);
   const sourceAccounts = withoutRetiredDemoAccounts(parsed.userAccounts || userAccountsFromTeam(sourceTeam));
   const localTeam = teamWithUserAccounts(sourceTeam, sourceAccounts);
   return {
-    ...starterState,
     ...parsed,
     profiles: mergeDefaultProfiles(parsed.profiles),
-    fields: parsed.fields || starterState.fields,
-    tasks: parsed.tasks || starterState.tasks,
-    harvests: parsed.harvests || starterState.harvests,
-    crops: parsed.crops || starterState.crops,
-    stock: parsed.stock || starterState.stock,
-    finance: parsed.finance || starterState.finance,
+    fields: arrayOrEmpty(parsed.fields),
+    tasks: arrayOrEmpty(parsed.tasks),
+    harvests: arrayOrEmpty(parsed.harvests),
+    crops: arrayOrEmpty(parsed.crops),
+    stock: arrayOrEmpty(parsed.stock),
+    finance: arrayOrEmpty(parsed.finance),
     team: ensureAdminAccess(mergeDefaultTeam(localTeam)),
     userAccounts: userAccountsFromTeam(localTeam),
     dailyTaskTemplates: normalizeDailyTaskTemplates(parsed.dailyTaskTemplates || dailyTaskTemplates),
     updatedAt: parsed.updatedAt || new Date().toISOString()
   };
+}
+
+function createInitialState() {
+  return normalizeLoadedState({
+    profiles: starterState.profiles,
+    fields: [],
+    tasks: [],
+    harvests: [],
+    crops: starterState.crops,
+    stock: [],
+    finance: [],
+    team: starterState.team,
+    userAccounts: userAccountsFromTeam(starterState.team),
+    dailyTaskTemplates,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+function arrayOrEmpty(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function matchesStarterExample(item, key) {
+  if (key === "fields") return retiredStarterExamples.fields.has(`${item.name}|${item.crop}|${Number(item.area)}|${item.mode}`);
+  if (key === "tasks") return retiredStarterExamples.tasks.has(`${item.title}|${item.field}|${item.owner}|${item.due}`);
+  if (key === "harvests") return retiredStarterExamples.harvests.has(`${item.date}|${item.field}|${item.crop}|${Number(item.quantity)}`);
+  if (key === "stock") return retiredStarterExamples.stock.has(`${item.item}|${item.category}|${Number(item.quantity)}`);
+  if (key === "finance") return retiredStarterExamples.finance.has(`${item.date}|${item.label}|${item.crop}|${Number(item.amount)}`);
+  return false;
+}
+
+function withoutStarterExamples(data = {}) {
+  const clean = { ...data };
+  ["fields", "tasks", "harvests", "stock", "finance"].forEach((key) => {
+    clean[key] = arrayOrEmpty(clean[key]).filter((item) => !matchesStarterExample(item, key));
+  });
+  return clean;
 }
 
 function saveState(options = {}) {
@@ -487,6 +465,12 @@ function teamWithUserAccounts(team = [], accounts = []) {
 
 function hasUsableAccounts(accounts = []) {
   return accounts.some((account) => account.login && account.password);
+}
+
+function hasBusinessData(data = {}) {
+  return ["fields", "tasks", "harvests", "stock", "finance"].some((key) => arrayOrEmpty(data[key]).length > 0)
+    || arrayOrEmpty(data.crops).some((crop) => !starterState.crops.some((defaultCrop) => defaultCrop.name === crop.name))
+    || arrayOrEmpty(data.team).some((person) => person.id !== "admin-user");
 }
 
 function normalizeDailyTaskTemplates(templates = []) {
@@ -677,19 +661,19 @@ async function responseErrorText(response) {
 
 function normalizeLoadedState(data) {
   data = repairTextEncoding(data || {});
+  data = withoutStarterExamples(data);
   const sourceTeam = withoutRetiredDemoUsers(data.team || starterState.team);
   const sourceAccounts = withoutRetiredDemoAccounts(data.userAccounts || userAccountsFromTeam(sourceTeam));
   const remoteTeam = teamWithUserAccounts(sourceTeam, sourceAccounts);
   return {
-    ...starterState,
     ...data,
     profiles: mergeDefaultProfiles(data.profiles),
-    fields: data.fields || starterState.fields,
-    tasks: data.tasks || starterState.tasks,
-    harvests: data.harvests || starterState.harvests,
-    crops: data.crops || starterState.crops,
-    stock: data.stock || starterState.stock,
-    finance: data.finance || starterState.finance,
+    fields: arrayOrEmpty(data.fields),
+    tasks: arrayOrEmpty(data.tasks),
+    harvests: arrayOrEmpty(data.harvests),
+    crops: arrayOrEmpty(data.crops),
+    stock: arrayOrEmpty(data.stock),
+    finance: arrayOrEmpty(data.finance),
     team: ensureAdminAccess(mergeDefaultTeam(remoteTeam)),
     userAccounts: userAccountsFromTeam(remoteTeam),
     dailyTaskTemplates: normalizeDailyTaskTemplates(data.dailyTaskTemplates || dailyTaskTemplates),
@@ -836,8 +820,14 @@ async function syncFromSupabase() {
     const remoteDate = new Date(remoteData.updatedAt || remoteRow.updated_at || 0).getTime();
     const localDate = new Date(state.updatedAt || 0).getTime();
     const localAccounts = userAccountsFromTeam(state.team || []);
+    const remoteHasBusinessData = hasBusinessData(remoteData);
+    const localHasBusinessData = hasBusinessData(state);
     if (!hasUsableAccounts(remoteData.userAccounts) && hasUsableAccounts(localAccounts)) {
       state.userAccounts = localAccounts;
+      await pushRemoteState();
+      return;
+    }
+    if (!remoteHasBusinessData && localHasBusinessData) {
       await pushRemoteState();
       return;
     }
