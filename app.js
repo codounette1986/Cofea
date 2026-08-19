@@ -820,6 +820,7 @@ async function replaceRemoteCollection(collection) {
   const remoteRowsRaw = await readRemoteRows(table).catch(() => []);
   const remoteRows = remoteRowsRaw.map((row) => remoteRowToRecord(collection, row));
   const deletedRows = collectionObject((state.deletedRecords || {})[collection]);
+  const appliedDeletedRows = { ...deletedRows };
 
   if (!source.length && !Object.keys(deletedRows).length) {
     if (remoteRows.length && collection !== "userAccounts") state[collection] = mergeRecords([], remoteRows, {});
@@ -829,6 +830,7 @@ async function replaceRemoteCollection(collection) {
   for (const [id, deletedAt] of Object.entries(deletedRows)) {
     const remoteRecord = remoteRows.find((row) => row.id === id);
     if (remoteRecord && recordTime(remoteRecord) > new Date(deletedAt).getTime()) {
+      delete appliedDeletedRows[id];
       delete deletedRows[id];
       continue;
     }
@@ -839,10 +841,10 @@ async function replaceRemoteCollection(collection) {
     if (!deleteResponse.ok && deleteResponse.status !== 404) {
       throw new Error(`Nettoyage ${table} impossible (${await responseErrorText(deleteResponse)})`);
     }
-    delete deletedRows[id];
   }
 
-  const mergedSource = mergeRecords(source, remoteRows, deletedRows);
+  const remoteRowsAfterDeletes = remoteRows.filter((row) => !appliedDeletedRows[row.id]);
+  const mergedSource = mergeRecords(source, remoteRowsAfterDeletes, appliedDeletedRows);
   if (collection !== "userAccounts") state[collection] = mergedSource;
   if (collection === "team") {
     state.team = ensureAdminAccess(teamWithUserAccounts(mergedSource, userAccountsFromTeam(state.team || [])));
