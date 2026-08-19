@@ -94,6 +94,14 @@ let syncState = {
   detail: localStorage.getItem(lastRemoteSyncKey) ? `Dernière synchro : ${localStorage.getItem(lastRemoteSyncKey)}` : "Supabase prêt"
 };
 
+window.addEventListener("error", (event) => {
+  showStartupError(event.message || "Erreur de chargement de l'application.");
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  showStartupError(event.reason?.message || "Erreur réseau ou synchronisation interrompue.");
+});
+
 const cropStages = [
   "Pépinière",
   "Repiquage",
@@ -627,7 +635,9 @@ function init() {
   if (currentUser()) {
     showApp();
   } else {
-    openEmergencyAdminSession();
+    activeUserId = "";
+    localStorage.removeItem(authUserKey);
+    showLogin();
   }
 }
 
@@ -715,6 +725,14 @@ function showLogin(message = "") {
   if (pageTitle) pageTitle.textContent = "Connexion";
 }
 
+function showStartupError(message) {
+  const loginMessage = document.querySelector("#loginMessage");
+  if (!loginMessage) return;
+  document.body.classList.remove("authenticated");
+  loginMessage.textContent = `Erreur : ${message}`;
+  loginMessage.className = "password-message error";
+}
+
 function showApp() {
   const user = currentUser();
   if (!user) {
@@ -724,9 +742,14 @@ function showApp() {
   activeProfileId = user.profileId || "terrain-profile";
   localStorage.setItem(activeProfileKey, activeProfileId);
   document.body.classList.add("authenticated");
-  ensureAllowedView();
-  render();
-  syncFromSupabase();
+  try {
+    ensureAllowedView();
+    render();
+    syncFromSupabase();
+  } catch (error) {
+    document.body.classList.remove("authenticated");
+    showStartupError(error.message);
+  }
 }
 
 function openEmergencyAdminSession() {
@@ -743,22 +766,27 @@ async function handleLogin(event) {
   const form = event.currentTarget;
   const login = form.elements.login.value.trim();
   const password = form.elements.password.value;
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+  showLogin("Connexion en cours...");
   let user = state.team.find((person) => String(person.login || "").trim() === login && String(person.password || "") === password);
-  if (!user) {
-    user = await loginFromSupabaseAccounts(login, password);
-  }
   if (!user && login === "admin" && password === "admin123") {
     state.team = ensureAdminAccess(state.team);
-    saveState();
+    saveState({ sync: false });
     user = state.team.find((person) => person.id === "admin-user");
   }
   if (!user) {
+    user = await loginFromSupabaseAccounts(login, password);
+  }
+  if (!user) {
     showLogin("Identifiant ou mot de passe incorrect.");
+    if (submitButton) submitButton.disabled = false;
     return;
   }
   activeUserId = user.id;
   localStorage.setItem(authUserKey, activeUserId);
   form.reset();
+  if (submitButton) submitButton.disabled = false;
   showApp();
 }
 
@@ -793,7 +821,12 @@ async function loginFromSupabaseAccounts(login, password) {
 }
 
 function resetAdminLogin() {
-  openEmergencyAdminSession();
+  state.team = ensureAdminAccess(state.team);
+  state.userAccounts = userAccountsFromTeam(state.team);
+  saveState({ sync: false });
+  activeUserId = "admin-user";
+  localStorage.setItem(authUserKey, activeUserId);
+  showApp();
 }
 
 function logout() {
