@@ -359,7 +359,7 @@
         state.userAccounts = [{ id: "admin-user", teamId: "admin-user", login: "admin", password: "admin123", profileId: "admin-profile" }];
         state.updatedAt = new Date().toISOString();
         localStorage.setItem(stateKey, JSON.stringify(state));
-        localStorage.removeItem(authUserKey);
+        localStorage.setItem(authUserKey, "admin-user");
         const form = document.querySelector("#loginForm");
         if (form) {
           form.elements.login.value = "admin";
@@ -367,9 +367,12 @@
         }
         const message = document.querySelector("#loginMessage");
         if (message) {
-          message.textContent = "Accès admin réinitialisé. Connectez-vous avec admin / admin123.";
+          message.textContent = "Accès admin réinitialisé. Ouverture de la session admin...";
           message.className = "password-message success";
         }
+        window.setTimeout(function () {
+          window.location.reload();
+        }, 300);
       };
     </script>
     <script src="./app.js" type="module"></script>

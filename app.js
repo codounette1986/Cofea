@@ -754,14 +754,14 @@ function resetAdminLogin() {
   state.team = ensureAdminAccess(state.team);
   state.userAccounts = userAccountsFromTeam(state.team);
   saveState();
-  activeUserId = "";
-  localStorage.removeItem(authUserKey);
+  activeUserId = "admin-user";
+  localStorage.setItem(authUserKey, activeUserId);
   const form = document.querySelector("#loginForm");
   if (form) {
     form.elements.login.value = "admin";
     form.elements.password.value = "admin123";
   }
-  showLogin("Accès admin réinitialisé. Connectez-vous avec admin / admin123.");
+  showApp();
 }
 
 function logout() {

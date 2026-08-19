@@ -1,4 +1,4 @@
-const cacheName = "agripilot-pwa-v49";
+const cacheName = "agripilot-pwa-v50";
 const assets = [
   "./",
   "./index.html",
