@@ -336,6 +336,7 @@ function loadState() {
     localStorage.removeItem(stateKey);
     return createInitialState();
   }
+  const parsedDeletedRecords = deletedRecordsFromRows(parsed);
   parsed = withoutStarterExamples(parsed);
   const sourceTeam = withoutRetiredDemoUsers(parsed.team || starterState.team);
   const sourceAccounts = withoutRetiredDemoAccounts(parsed.userAccounts || userAccountsFromTeam(sourceTeam));
@@ -352,7 +353,7 @@ function loadState() {
     team: ensureAdminAccess(mergeDefaultTeam(localTeam)),
     userAccounts: userAccountsFromTeam(localTeam),
     dailyTaskTemplates: normalizeDailyTaskTemplates(parsed.dailyTaskTemplates || dailyTaskTemplates),
-    deletedRecords: normalizeDeletedRecords(parsed.deletedRecords),
+    deletedRecords: mergeDeletedRecords(parsed.deletedRecords, parsedDeletedRecords),
     updatedAt: parsed.updatedAt || new Date().toISOString()
   };
 }
@@ -390,6 +391,29 @@ function normalizeDeletedRecords(value = {}) {
   return normalized;
 }
 
+function deletedRecordsFromRows(data = {}) {
+  const deleted = normalizeDeletedRecords(data.deletedRecords);
+  syncedCollections().forEach((collection) => {
+    arrayOrEmpty(data[collection]).forEach((row) => {
+      if (row.deletedAt) deleted[collection][row.id] = row.deletedAt;
+    });
+  });
+  return deleted;
+}
+
+function mergeDeletedRecords(localDeleted = {}, remoteDeleted = {}) {
+  const merged = normalizeDeletedRecords(localDeleted);
+  const remote = normalizeDeletedRecords(remoteDeleted);
+  syncedCollections().forEach((collection) => {
+    Object.entries(remote[collection]).forEach(([id, deletedAt]) => {
+      const localTime = new Date(merged[collection][id] || 0).getTime();
+      const remoteTime = new Date(deletedAt || 0).getTime();
+      if (!merged[collection][id] || remoteTime >= localTime) merged[collection][id] = deletedAt;
+    });
+  });
+  return merged;
+}
+
 function recordTime(record = {}) {
   const time = new Date(record.updatedAt || record.updated_at || 0).getTime();
   return Number.isFinite(time) ? time : 0;
@@ -407,11 +431,18 @@ function currentUserLabel() {
 
 function mergeRecords(localRows = [], remoteRows = [], deletedRows = {}) {
   const merged = new Map();
+  const tombstones = { ...deletedRows };
   remoteRows.forEach((row) => {
-    if (!deletedRows[row.id]) merged.set(row.id, row);
+    if (!row.deletedAt) return;
+    const existingTime = new Date(tombstones[row.id] || 0).getTime();
+    const remoteDeleteTime = new Date(row.deletedAt || 0).getTime();
+    if (!tombstones[row.id] || remoteDeleteTime >= existingTime) tombstones[row.id] = row.deletedAt;
+  });
+  remoteRows.forEach((row) => {
+    if (!tombstones[row.id]) merged.set(row.id, row);
   });
   localRows.forEach((row) => {
-    if (deletedRows[row.id]) return;
+    if (tombstones[row.id]) return;
     const existing = merged.get(row.id);
     if (!existing || recordTime(row) >= recordTime(existing)) merged.set(row.id, row);
   });
@@ -441,7 +472,10 @@ function matchesStarterExample(item, key) {
 function withoutStarterExamples(data = {}) {
   const clean = { ...data };
   ["fields", "tasks", "harvests", "stock", "finance"].forEach((key) => {
-    clean[key] = arrayOrEmpty(clean[key]).filter((item) => !matchesStarterExample(item, key));
+    clean[key] = arrayOrEmpty(clean[key]).filter((item) => !item.deletedAt && !matchesStarterExample(item, key));
+  });
+  ["profiles", "crops", "dailyTaskTemplates", "team", "userAccounts"].forEach((key) => {
+    clean[key] = arrayOrEmpty(clean[key]).filter((item) => !item.deletedAt);
   });
   return clean;
 }
@@ -665,7 +699,7 @@ const remoteJsonFields = new Set(["pages", "sections", "crops", "modes"]);
 
 function remoteRowToRecord(collection, row) {
   if (row.data && typeof row.data === "object") {
-    return repairTextEncoding({ id: row.id, updatedAt: row.updated_at || row.data.updatedAt || "", updatedBy: row.updated_by || row.data.updatedBy || "", ...row.data });
+    return repairTextEncoding({ id: row.id, updatedAt: row.updated_at || row.data.updatedAt || "", updatedBy: row.updated_by || row.data.updatedBy || "", deletedAt: row.deleted_at || row.data.deletedAt || "", deletedBy: row.deleted_by || row.data.deletedBy || "", ...row.data });
   }
   const columnMap = remoteColumnMap[collection] || {};
   const record = { id: row.id };
@@ -676,6 +710,8 @@ function remoteRowToRecord(collection, row) {
   });
   record.updatedAt = row.updated_at || "";
   record.updatedBy = row.updated_by || "";
+  record.deletedAt = row.deleted_at || "";
+  record.deletedBy = row.deleted_by || "";
   if (collection === "finance") record.isSale = row.is_sale ? "on" : "";
   return repairTextEncoding(record);
 }
@@ -699,7 +735,21 @@ function recordToRemoteRow(collection, item) {
   Object.entries(columnMap).forEach(([appKey, columnKey]) => {
     row[columnKey] = normalizeRemoteValue(collection, appKey, item[appKey]);
   });
+  if (item.deletedAt) {
+    row.deleted_at = item.deletedAt;
+    row.deleted_by = item.deletedBy || item.updatedBy || currentUserLabel();
+  }
   return row;
+}
+
+function recordToDeletedRemoteRow(id, deletedAt) {
+  return {
+    id,
+    updated_at: deletedAt,
+    updated_by: currentUserLabel(),
+    deleted_at: deletedAt,
+    deleted_by: currentUserLabel()
+  };
 }
 
 function recordToJsonRemoteRow(item) {
@@ -718,6 +768,7 @@ async function responseErrorText(response) {
 
 function normalizeLoadedState(data) {
   data = repairTextEncoding(data || {});
+  const deletedRecords = deletedRecordsFromRows(data);
   data = withoutStarterExamples(data);
   const sourceTeam = withoutRetiredDemoUsers(data.team || starterState.team);
   const sourceAccounts = withoutRetiredDemoAccounts(data.userAccounts || userAccountsFromTeam(sourceTeam));
@@ -734,14 +785,14 @@ function normalizeLoadedState(data) {
     team: ensureAdminAccess(mergeDefaultTeam(remoteTeam)),
     userAccounts: userAccountsFromTeam(remoteTeam),
     dailyTaskTemplates: normalizeDailyTaskTemplates(data.dailyTaskTemplates || dailyTaskTemplates),
-    deletedRecords: normalizeDeletedRecords(data.deletedRecords),
+    deletedRecords,
     updatedAt: data.updatedAt || new Date().toISOString()
   };
 }
 
 function mergeRemoteState(remoteData = {}) {
   const remoteState = normalizeLoadedState(remoteData);
-  state.deletedRecords = normalizeDeletedRecords(state.deletedRecords);
+  state.deletedRecords = mergeDeletedRecords(state.deletedRecords, remoteState.deletedRecords);
   syncedCollections().forEach((collection) => {
     if (collection === "team" || collection === "userAccounts") return;
     state[collection] = mergeRecords(
@@ -798,10 +849,11 @@ async function readRemoteRows(table) {
   throw new Error(`Lecture ${table} impossible. Vérifiez le SQL Supabase. ${lastError}`);
 }
 
-async function fetchRemoteCollection(collection) {
+async function fetchRemoteCollection(collection, options = {}) {
   const table = supabaseConfig.tables[collection];
   const rows = await readRemoteRows(table);
-  return rows.map((row) => remoteRowToRecord(collection, row));
+  const records = rows.map((row) => remoteRowToRecord(collection, row));
+  return options.includeDeleted ? records : records.filter((row) => !row.deletedAt);
 }
 
 async function fetchRemoteState() {
@@ -809,7 +861,7 @@ async function fetchRemoteState() {
   if (!remoteMeta) return null;
   const remoteData = { updatedAt: remoteMeta.updated_at };
   for (const collection of syncedCollections()) {
-    remoteData[collection] = await fetchRemoteCollection(collection).catch(() => []);
+    remoteData[collection] = await fetchRemoteCollection(collection, { includeDeleted: true }).catch(() => []);
   }
   return { data: remoteData, updated_at: remoteMeta.updated_at };
 }
@@ -828,18 +880,19 @@ async function replaceRemoteCollection(collection) {
   }
 
   for (const [id, deletedAt] of Object.entries(deletedRows)) {
-    const remoteRecord = remoteRows.find((row) => row.id === id);
-    if (remoteRecord && recordTime(remoteRecord) > new Date(deletedAt).getTime()) {
-      delete appliedDeletedRows[id];
-      delete deletedRows[id];
-      continue;
-    }
-    const deleteResponse = await supabaseRequest(`${remoteTableUrl(table)}?id=eq.${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      headers: supabaseHeaders({ Prefer: "return=minimal" })
+    const tombstoneResponse = await supabaseRequest(`${remoteTableUrl(table)}?on_conflict=id`, {
+      method: "POST",
+      headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify([recordToDeletedRemoteRow(id, deletedAt)])
     });
-    if (!deleteResponse.ok && deleteResponse.status !== 404) {
-      throw new Error(`Nettoyage ${table} impossible (${await responseErrorText(deleteResponse)})`);
+    if (!tombstoneResponse.ok) {
+      const deleteResponse = await supabaseRequest(`${remoteTableUrl(table)}?id=eq.${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: supabaseHeaders({ Prefer: "return=minimal" })
+      });
+      if (!deleteResponse.ok && deleteResponse.status !== 404) {
+        throw new Error(`Suppression ${table} impossible (${await responseErrorText(tombstoneResponse)})`);
+      }
     }
   }
 
