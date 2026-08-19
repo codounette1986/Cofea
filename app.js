@@ -345,7 +345,13 @@ const modalConfig = {
 function loadState() {
   const stored = localStorage.getItem(stateKey);
   if (!stored) return normalizeLoadedState({ ...starterState, dailyTaskTemplates, updatedAt: new Date().toISOString() });
-  const parsed = JSON.parse(stored);
+  let parsed = {};
+  try {
+    parsed = JSON.parse(stored);
+  } catch (error) {
+    localStorage.removeItem(stateKey);
+    return normalizeLoadedState({ ...starterState, dailyTaskTemplates, updatedAt: new Date().toISOString() });
+  }
   const localTeam = teamWithUserAccounts(parsed.team || starterState.team, parsed.userAccounts || userAccountsFromTeam(parsed.team || starterState.team));
   return {
     ...starterState,
@@ -622,7 +628,6 @@ function init() {
     showApp();
   } else {
     showLogin();
-    syncFromSupabase();
   }
 }
 

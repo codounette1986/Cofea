@@ -31,7 +31,7 @@
         <label>Mot de passe<input name="password" type="password" required autocomplete="current-password" /></label>
         <p class="password-message" id="loginMessage"></p>
         <button class="primary-button" type="submit">Se connecter</button>
-        <button class="text-button login-reset-button" id="resetAdminBtn" type="button">Réinitialiser accès admin</button>
+        <button class="text-button login-reset-button" id="resetAdminBtn" type="button" onclick="window.resetAgriPilotAdmin && window.resetAgriPilotAdmin()">Réinitialiser accès admin</button>
       </form>
     </section>
 <div class="app-shell">
@@ -338,6 +338,40 @@
       </form>
     </dialog>
 
+    <script>
+      window.resetAgriPilotAdmin = function () {
+        const stateKey = "agripilot-state-v1";
+        const authUserKey = "agripilot-auth-user-v1";
+        const adminProfile = { id: "admin-profile", name: "Admins", role: "Admin", note: "Accès complet à toute l'application." };
+        const adminUser = { id: "admin-user", name: "Administrateur", role: "Admin", phone: "", profileId: "admin-profile", login: "admin", password: "admin123" };
+        let state = {};
+        try {
+          state = JSON.parse(localStorage.getItem(stateKey) || "{}");
+        } catch (error) {
+          state = {};
+        }
+        const profiles = Array.isArray(state.profiles) ? state.profiles : [];
+        const team = Array.isArray(state.team) ? state.team : [];
+        state.profiles = profiles.some((profile) => profile.id === "admin-profile")
+          ? profiles
+          : [adminProfile].concat(profiles);
+        state.team = [adminUser].concat(team.filter((person) => person.id !== "admin-user" && person.login !== "admin"));
+        state.userAccounts = [{ id: "admin-user", teamId: "admin-user", login: "admin", password: "admin123", profileId: "admin-profile" }];
+        state.updatedAt = new Date().toISOString();
+        localStorage.setItem(stateKey, JSON.stringify(state));
+        localStorage.removeItem(authUserKey);
+        const form = document.querySelector("#loginForm");
+        if (form) {
+          form.elements.login.value = "admin";
+          form.elements.password.value = "admin123";
+        }
+        const message = document.querySelector("#loginMessage");
+        if (message) {
+          message.textContent = "Accès admin réinitialisé. Connectez-vous avec admin / admin123.";
+          message.className = "password-message success";
+        }
+      };
+    </script>
     <script src="./app.js" type="module"></script>
   </body>
 </html>
