@@ -530,6 +530,145 @@ function syncedCollections() {
   return Object.keys(supabaseConfig.tables);
 }
 
+const remoteColumnMap = {
+  profiles: {
+    name: "name",
+    role: "role",
+    pages: "pages",
+    sections: "sections",
+    note: "note"
+  },
+  fields: {
+    name: "name",
+    crop: "crop",
+    active: "active",
+    area: "area",
+    stage: "stage",
+    health: "health",
+    mode: "mode",
+    update: "field_update"
+  },
+  tasks: {
+    title: "title",
+    field: "field",
+    owner: "owner",
+    due: "due",
+    status: "status"
+  },
+  dailyTaskTemplates: {
+    title: "title",
+    crops: "crops",
+    modes: "modes",
+    note: "note"
+  },
+  harvests: {
+    date: "date",
+    field: "field",
+    crop: "crop",
+    quantity: "quantity",
+    unit: "unit",
+    quality: "quality",
+    destination: "destination"
+  },
+  crops: {
+    name: "name",
+    active: "active",
+    family: "family",
+    cycle: "cycle",
+    water: "water",
+    spacing: "spacing",
+    notes: "notes"
+  },
+  stock: {
+    item: "item",
+    category: "category",
+    quantity: "quantity",
+    unit: "unit",
+    threshold: "threshold"
+  },
+  finance: {
+    date: "date",
+    label: "label",
+    crop: "crop",
+    type: "type",
+    amount: "amount",
+    isSale: "is_sale",
+    saleQuantity: "sale_quantity",
+    salePrice: "sale_price",
+    saleUnit: "sale_unit",
+    saleKgEquivalent: "sale_kg_equivalent"
+  },
+  team: {
+    name: "name",
+    role: "role",
+    phone: "phone",
+    profileId: "profile_id"
+  },
+  userAccounts: {
+    teamId: "team_id",
+    login: "login",
+    password: "password",
+    profileId: "profile_id"
+  }
+};
+
+const remoteNumericFields = new Set([
+  "area",
+  "health",
+  "quantity",
+  "threshold",
+  "amount",
+  "saleQuantity",
+  "salePrice",
+  "saleKgEquivalent"
+]);
+const remoteDateFields = new Set(["date", "due"]);
+const remoteJsonFields = new Set(["pages", "sections", "crops", "modes"]);
+
+function remoteRowToRecord(collection, row) {
+  if (row.data && typeof row.data === "object") {
+    return repairTextEncoding({ id: row.id, ...row.data });
+  }
+  const columnMap = remoteColumnMap[collection] || {};
+  const record = { id: row.id };
+  Object.entries(columnMap).forEach(([appKey, columnKey]) => {
+    if (Object.prototype.hasOwnProperty.call(row, columnKey)) {
+      record[appKey] = row[columnKey];
+    }
+  });
+  if (collection === "finance") record.isSale = row.is_sale ? "on" : "";
+  return repairTextEncoding(record);
+}
+
+function normalizeRemoteValue(collection, appKey, value) {
+  if (collection === "finance" && appKey === "isSale") return Boolean(value);
+  if (value === undefined || value === "") return null;
+  if (remoteNumericFields.has(appKey)) return Number(value);
+  if (remoteDateFields.has(appKey)) return value || null;
+  if (remoteJsonFields.has(appKey)) return Array.isArray(value) ? value : null;
+  return value;
+}
+
+function recordToRemoteRow(collection, item) {
+  const columnMap = remoteColumnMap[collection] || {};
+  const row = {
+    id: item.id,
+    updated_at: state.updatedAt || new Date().toISOString()
+  };
+  Object.entries(columnMap).forEach(([appKey, columnKey]) => {
+    row[columnKey] = normalizeRemoteValue(collection, appKey, item[appKey]);
+  });
+  return row;
+}
+
+function recordToJsonRemoteRow(item) {
+  return {
+    id: item.id,
+    data: item,
+    updated_at: state.updatedAt || new Date().toISOString()
+  };
+}
+
 function normalizeLoadedState(data) {
   data = repairTextEncoding(data || {});
   const sourceTeam = withoutRetiredDemoUsers(data.team || starterState.team);
@@ -568,12 +707,12 @@ async function fetchRemoteMeta() {
 
 async function fetchRemoteCollection(collection) {
   const table = supabaseConfig.tables[collection];
-  const response = await supabaseRequest(`${remoteTableUrl(table)}?select=id,data,updated_at&order=updated_at.asc`, {
+  const response = await supabaseRequest(`${remoteTableUrl(table)}?select=*&order=updated_at.asc`, {
     headers: supabaseHeaders()
   });
   if (!response.ok) throw new Error(`Lecture ${table} impossible (${response.status})`);
   const rows = await response.json();
-  return rows.map((row) => repairTextEncoding({ id: row.id, ...row.data }));
+  return rows.map((row) => remoteRowToRecord(collection, row));
 }
 
 async function fetchRemoteState() {
@@ -593,11 +732,7 @@ async function replaceRemoteCollection(collection) {
     : collection === "userAccounts"
       ? userAccountsFromTeam(state.team || [])
       : state[collection] || [];
-  const rows = source.map((item) => ({
-    id: item.id,
-    data: item,
-    updated_at: state.updatedAt || new Date().toISOString()
-  }));
+  const rows = source.map((item) => recordToRemoteRow(collection, item));
   const deleteResponse = await supabaseRequest(`${remoteTableUrl(table)}?id=neq.__agripilot_never__`, {
     method: "DELETE",
     headers: supabaseHeaders({ Prefer: "return=minimal" })
@@ -609,7 +744,14 @@ async function replaceRemoteCollection(collection) {
     headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
     body: JSON.stringify(rows)
   });
-  if (!insertResponse.ok) throw new Error(`Sauvegarde ${table} impossible (${insertResponse.status})`);
+  if (insertResponse.ok) return;
+  const fallbackRows = source.map(recordToJsonRemoteRow);
+  const fallbackResponse = await supabaseRequest(remoteTableUrl(table), {
+    method: "POST",
+    headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+    body: JSON.stringify(fallbackRows)
+  });
+  if (!fallbackResponse.ok) throw new Error(`Sauvegarde ${table} impossible (${insertResponse.status})`);
 }
 
 async function saveRemoteMeta() {
