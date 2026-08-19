@@ -48,6 +48,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   border-bottom: 1px solid var(--line);
 }
 .login-card p { color: var(--muted); margin-bottom: 0; }
+.login-reset-button { justify-content: center; }
 body.authenticated .login-screen { display: none; }
 body:not(.authenticated) .app-shell { display: none; }
 

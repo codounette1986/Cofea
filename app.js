@@ -680,6 +680,7 @@ function bindEvents() {
   document.body.addEventListener("change", handlePeriodInput);
 
   document.querySelector("#loginForm").addEventListener("submit", handleLogin);
+  document.querySelector("#resetAdminBtn")?.addEventListener("click", resetAdminLogin);
   document.querySelector("#quickTaskBtn").addEventListener("click", () => openModal("task"));
   document.querySelector("#logoutBtn").addEventListener("click", logout);
   document.querySelector("#recordForm").addEventListener("submit", handleFormSubmit);
@@ -742,6 +743,20 @@ function handleLogin(event) {
   localStorage.setItem(authUserKey, activeUserId);
   form.reset();
   showApp();
+}
+
+function resetAdminLogin() {
+  state.team = ensureAdminAccess(state.team);
+  state.userAccounts = userAccountsFromTeam(state.team);
+  saveState();
+  activeUserId = "";
+  localStorage.removeItem(authUserKey);
+  const form = document.querySelector("#loginForm");
+  if (form) {
+    form.elements.login.value = "admin";
+    form.elements.password.value = "admin123";
+  }
+  showLogin("Accès admin réinitialisé. Connectez-vous avec admin / admin123.");
 }
 
 function logout() {
