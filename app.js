@@ -91,7 +91,7 @@ let periodFilters = {
 let modalType = "task";
 let editingRecord = null;
 let activeProfileId = localStorage.getItem(activeProfileKey) || "admin-profile";
-let activeUserId = localStorage.getItem(authUserKey) || "";
+let activeUserId = sessionStorage.getItem(authUserKey) || "";
 let syncTimer = null;
 let syncState = {
   status: "idle",
@@ -661,13 +661,15 @@ function money(value) {
 
 function init() {
   state = loadState();
+  localStorage.removeItem(authUserKey);
+  activeUserId = sessionStorage.getItem(authUserKey) || "";
   bindEvents();
   registerServiceWorker();
   if (currentUser()) {
     showApp();
   } else {
     activeUserId = "";
-    localStorage.removeItem(authUserKey);
+    sessionStorage.removeItem(authUserKey);
     showLogin();
   }
 }
@@ -814,7 +816,7 @@ async function handleLogin(event) {
     return;
   }
   activeUserId = user.id;
-  localStorage.setItem(authUserKey, activeUserId);
+  sessionStorage.setItem(authUserKey, activeUserId);
   form.reset();
   if (submitButton) submitButton.disabled = false;
   showApp();
@@ -852,6 +854,7 @@ async function loginFromSupabaseAccounts(login, password) {
 
 function logout() {
   activeUserId = "";
+  sessionStorage.removeItem(authUserKey);
   localStorage.removeItem(authUserKey);
   showLogin();
 }
