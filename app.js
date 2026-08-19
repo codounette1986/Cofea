@@ -738,12 +738,15 @@ function openEmergencyAdminSession() {
   showApp();
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const login = form.elements.login.value.trim();
   const password = form.elements.password.value;
   let user = state.team.find((person) => String(person.login || "").trim() === login && String(person.password || "") === password);
+  if (!user) {
+    user = await loginFromSupabaseAccounts(login, password);
+  }
   if (!user && login === "admin" && password === "admin123") {
     state.team = ensureAdminAccess(state.team);
     saveState();
@@ -757,6 +760,36 @@ function handleLogin(event) {
   localStorage.setItem(authUserKey, activeUserId);
   form.reset();
   showApp();
+}
+
+async function loginFromSupabaseAccounts(login, password) {
+  if (!supabaseEnabled() || !navigator.onLine) return null;
+  try {
+    const accounts = await fetchRemoteCollection("userAccounts");
+    const account = accounts.find((item) =>
+      String(item.login || "").trim() === login && String(item.password || "") === password
+    );
+    if (!account) return null;
+    const remoteRow = await fetchRemoteState().catch(() => null);
+    if (remoteRow?.data) {
+      state = normalizeLoadedState(remoteRow.data);
+    } else {
+      const remoteTeam = await fetchRemoteCollection("team").catch(() => []);
+      const remoteProfiles = await fetchRemoteCollection("profiles").catch(() => []);
+      state = normalizeLoadedState({
+        ...state,
+        profiles: remoteProfiles.length ? remoteProfiles : state.profiles,
+        team: remoteTeam.length ? remoteTeam : state.team,
+        userAccounts: accounts,
+        updatedAt: new Date().toISOString()
+      });
+    }
+    saveState({ sync: false, touch: false });
+    return state.team.find((person) => person.id === (account.teamId || account.id)) || null;
+  } catch (error) {
+    setSyncStatus("error", `Connexion Supabase impossible : ${error.message}`);
+    return null;
+  }
 }
 
 function resetAdminLogin() {

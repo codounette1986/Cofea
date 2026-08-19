@@ -96,3 +96,37 @@ begin
     execute format('create policy "AgriPilot delete" on public.%I for delete using (true)', table_name);
   end loop;
 end $$;
+
+insert into public.profiles (id, data, updated_at)
+values (
+  'admin-profile',
+  '{"id":"admin-profile","name":"Admins","role":"Admin","note":"Accès complet à toute l''application."}'::jsonb,
+  now()
+)
+on conflict (id) do update set
+  data = excluded.data,
+  updated_at = excluded.updated_at;
+
+insert into public.team (id, data, updated_at)
+values (
+  'admin-user',
+  '{"id":"admin-user","name":"Administrateur","role":"Admin","phone":"","profileId":"admin-profile"}'::jsonb,
+  now()
+)
+on conflict (id) do update set
+  data = excluded.data,
+  updated_at = excluded.updated_at;
+
+insert into public.user_accounts (id, data, updated_at)
+values (
+  'admin-user',
+  '{"id":"admin-user","teamId":"admin-user","login":"admin","password":"admin123","profileId":"admin-profile"}'::jsonb,
+  now()
+)
+on conflict (id) do update set
+  data = excluded.data,
+  updated_at = excluded.updated_at;
+
+insert into public.app_sync_meta (id, updated_at)
+values ('agripilot-main', now())
+on conflict (id) do update set updated_at = excluded.updated_at;
