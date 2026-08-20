@@ -3,7 +3,7 @@
   "short_name": "AgriPilot",
   "description": "Application PWA pour gérer une exploitation agricole.",
   "id": "./start.html",
-  "start_url": "./start.html?v=102",
+  "start_url": "./start.html?v=104",
   "scope": "./",
   "display": "standalone",
   "background_color": "#fbfcf8",

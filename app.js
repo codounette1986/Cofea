@@ -566,17 +566,17 @@ function keepAccount(account) {
 }
 
 function mergeUserAccounts(existingAccounts = [], team = []) {
-  const accountsById = new Map(arrayOrEmpty(existingAccounts).filter(keepAccount).map((account) => [account.id, account]));
+  const accountsById = new Map(arrayOrEmpty(existingAccounts).filter(keepAccount).map((account) => [account.teamId || account.id, account]));
   ensureAdminAccess(team).forEach((person) => {
     const existing = accountsById.get(person.id) || {};
-    const login = person.login !== undefined ? person.login : existing.login;
-    const password = person.password !== undefined ? person.password : existing.password;
+    const login = existing.login || person.login || "";
+    const password = existing.password || person.password || "";
     accountsById.set(person.id, {
       ...existing,
       id: person.id,
       teamId: person.id,
-      login: login || "",
-      password: password || "",
+      login,
+      password,
       profileId: person.profileId || existing.profileId || "terrain-profile",
       updatedAt: person.updatedAt || existing.updatedAt || new Date().toISOString(),
       updatedBy: person.updatedBy || existing.updatedBy || currentUserLabel()
@@ -588,7 +588,7 @@ function mergeUserAccounts(existingAccounts = [], team = []) {
 function upsertUserAccountForTeamMember(memberId, data = {}) {
   if (!data.login && !data.password && memberId !== "admin-user") return;
   const timestamp = new Date().toISOString();
-  const existing = arrayOrEmpty(state.userAccounts).find((account) => account.id === memberId) || {};
+  const existing = arrayOrEmpty(state.userAccounts).find((account) => account.id === memberId || account.teamId === memberId) || {};
   const account = touchRecord({
     ...existing,
     id: memberId,
@@ -615,6 +615,22 @@ function teamWithUserAccounts(team = [], accounts = []) {
       profileId: account.profileId || person.profileId
     } : person;
   });
+}
+
+function accountForTeamMember(person = {}) {
+  return arrayOrEmpty(state.userAccounts).find((account) =>
+    keepAccount(account) && (account.id === person.id || account.teamId === person.id || account.login === person.login)
+  ) || {};
+}
+
+function teamRecordWithAccount(person = {}) {
+  const account = accountForTeamMember(person);
+  return {
+    ...person,
+    login: person.login || account.login || "",
+    password: person.password || account.password || "",
+    profileId: person.profileId || account.profileId || defaultTeamProfileId()
+  };
 }
 
 function hasUsableAccounts(accounts = []) {
@@ -2090,7 +2106,9 @@ function renderPrices() {
 
 function renderTeam() {
   const canEditTeam = canManageTeam();
-  document.querySelector("#teamGrid").innerHTML = state.team.map((person) => `
+  document.querySelector("#teamGrid").innerHTML = state.team.map((rawPerson) => {
+    const person = teamRecordWithAccount(rawPerson);
+    return `
     <article class="record-card">
       <strong>${person.name}</strong>
       <span class="muted">${person.role}</span>
@@ -2104,7 +2122,8 @@ function renderTeam() {
         ${person.id === "admin-user" || person.id === activeUserId ? "" : `<button data-delete="${person.id}" data-collection="team">Supprimer</button>`}
       </div>` : ""}
     </article>
-  `).join("");
+  `;
+  }).join("");
 }
 
 function fieldMini(field) {
@@ -2521,7 +2540,8 @@ function openModal(type, id = null) {
   if (!canWriteModal(type)) return;
   if (modalType === "team" && !canManageTeam()) return;
   const config = modalConfig[modalType];
-  const record = id ? state[config.collection].find((item) => item.id === id) : null;
+  const rawRecord = id ? state[config.collection].find((item) => item.id === id) : null;
+  const record = rawRecord && modalType === "team" ? teamRecordWithAccount(rawRecord) : rawRecord;
   const saleDefaults = saleShortcut ? { type: "Recette", isSale: "on", saleUnit: "kg" } : {};
   editingRecord = record ? { collection: config.collection, id } : null;
   document.querySelector("#modalTitle").textContent = saleShortcut ? "Ajouter une vente" : record ? config.title.replace("Ajouter", "Modifier") : config.title;
@@ -2796,6 +2816,29 @@ function passwordForCurrentUser(person) {
   return account && account.password !== undefined ? String(account.password || "") : String(person.password || "");
 }
 
+function accountMatchesPerson(account, person) {
+  return account && person && (
+    account.id === person.id
+    || account.teamId === person.id
+    || String(account.login || "").trim() === String(person.login || "").trim()
+  );
+}
+
+async function currentPasswordIsValid(person, currentPassword) {
+  if (!person) return false;
+  if (passwordForCurrentUser(person) === currentPassword) return true;
+  if (!supabaseEnabled() || !navigator.onLine) return false;
+  const remoteAccounts = await fetchRemoteCollection("userAccounts").catch(() => []);
+  const remoteAccount = remoteAccounts.find((account) => accountMatchesPerson(account, person));
+  if (!remoteAccount || String(remoteAccount.password || "") !== currentPassword) return false;
+  state.userAccounts = mergeUserAccounts([remoteAccount, ...arrayOrEmpty(state.userAccounts)], state.team);
+  state.team = state.team.map((member) =>
+    member.id === person.id ? { ...member, login: remoteAccount.login || member.login, password: remoteAccount.password || member.password, profileId: remoteAccount.profileId || member.profileId } : member
+  );
+  saveState({ sync: false, touch: false });
+  return true;
+}
+
 async function handlePasswordSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2804,7 +2847,7 @@ async function handlePasswordSubmit(event) {
   const newPassword = form.elements.newPassword.value;
   const confirmPassword = form.elements.confirmPassword.value;
   const person = currentUser();
-  if (!person || passwordForCurrentUser(person) !== currentPassword) {
+  if (!await currentPasswordIsValid(person, currentPassword)) {
     showPasswordMessage("Ancien mot de passe incorrect.", "error");
     return;
   }
