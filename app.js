@@ -1019,16 +1019,7 @@ async function replaceRemoteCollection(collection) {
     });
     if (!upsertResponse.ok) {
       const columnError = await responseErrorText(upsertResponse);
-      const fallbackRows = source.map(recordToJsonRemoteRow);
-      const fallbackResponse = await supabaseRequest(`${remoteTableUrl(table)}?on_conflict=id`, {
-        method: "POST",
-        headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
-        body: JSON.stringify(fallbackRows)
-      });
-      if (!fallbackResponse.ok) {
-        const fallbackError = await responseErrorText(fallbackResponse);
-        throw new Error(`Sauvegarde ${table} impossible. Colonnes: ${columnError}. JSON: ${fallbackError}`);
-      }
+      throw new Error(`Sauvegarde ${table} impossible. Vérifiez les colonnes Supabase : ${columnError}`);
     }
   }
 }
