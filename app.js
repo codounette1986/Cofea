@@ -5,7 +5,6 @@ const lastRemoteSyncKey = "agripilot-last-remote-sync-v1";
 const weatherCacheKey = "agripilot-weather-forecast-v1";
 const weatherLocationCacheKey = "agripilot-weather-location-v1";
 const deletionRetentionDays = 30;
-const weatherTimezone = "Africa/Dakar";
 
 const supabaseConfig = {
   url: "https://zulvxofvazgsllibodfp.supabase.co",
@@ -1467,7 +1466,7 @@ function renderWeather() {
   const updatedAt = weatherForecast.updatedAt ? new Date(weatherForecast.updatedAt) : null;
   const current = weatherForecast.current || {};
   const days = weatherForecast.days || [];
-  const currentTemp = Number.isFinite(current.temperature) ? `${Math.round(current.temperature)}°C` : "7 jours";
+  const currentTemp = Number.isFinite(current.temperature) ? `${Math.round(current.temperature)}°C` : "5 jours";
   const currentLine = [
     weatherLabel(current.weatherCode),
     Number.isFinite(current.windSpeed) ? `Vent ${Math.round(current.windSpeed)} km/h` : "",
@@ -1477,7 +1476,7 @@ function renderWeather() {
     <div class="weather-current">
       <div>
         <strong>${currentTemp}</strong>
-        <span>${currentLine || "Prévision agricole sur 7 jours"}</span>
+        <span>${currentLine || "Prévision agricole sur 5 jours"}</span>
       </div>
       <span class="pill">${updatedAt ? `MAJ ${updatedAt.toLocaleTimeString("fr-SN", { hour: "2-digit", minute: "2-digit" })}` : "Prévision"}</span>
     </div>
@@ -1518,8 +1517,8 @@ async function loadWeatherForecast(options = {}) {
     url.search = new URLSearchParams({
       latitude: String(weatherLocation.latitude),
       longitude: String(weatherLocation.longitude),
-      timezone: weatherLocation.timezone,
-      forecast_days: "7",
+      timezone: "auto",
+      forecast_days: "5",
       current: "temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m",
       daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,et0_fao_evapotranspiration"
     }).toString();
@@ -1545,12 +1544,12 @@ function resolveWeatherLocation() {
   if (!("geolocation" in navigator)) return Promise.resolve(null);
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
+        const placeName = await fetchPlaceName(position.coords.latitude, position.coords.longitude);
         const location = {
-          label: "Position actuelle",
+          label: placeName || "Position actuelle",
           latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          timezone: weatherTimezone
+          longitude: position.coords.longitude
         };
         localStorage.setItem(weatherLocationCacheKey, JSON.stringify(location));
         resolve(location);
@@ -1565,6 +1564,30 @@ function resolveWeatherLocation() {
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 6 * 60 * 60 * 1000 }
     );
   });
+}
+
+async function fetchPlaceName(latitude, longitude) {
+  try {
+    const url = new URL("https://api.bigdatacloud.net/data/reverse-geocode-client");
+    url.search = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+      localityLanguage: "fr"
+    }).toString();
+    const response = await fetch(url.toString());
+    if (!response.ok) return "";
+    const data = await response.json();
+    return formatPlaceName(data);
+  } catch (error) {
+    return "";
+  }
+}
+
+function formatPlaceName(data) {
+  const locality = data.locality || data.city || "";
+  const area = data.principalSubdivision || "";
+  const country = data.countryName || "";
+  return [locality, area, country].filter(Boolean).slice(0, 2).join(", ") || country;
 }
 
 function normalizeWeatherForecast(data) {
