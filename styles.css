@@ -148,6 +148,7 @@ body:not(.authenticated) .app-shell { display: none; }
   padding: 0 10px;
 }
 .sync-button:disabled { opacity: 0.55; cursor: not-allowed; }
+.mobile-sync-button { display: none; }
 
 .main { padding: 28px; }
 .topbar, .section-head, .panel-head, .section-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -229,18 +230,34 @@ h2 { font-size: 1.05rem; margin-bottom: 0; }
 .daily-task-panel { margin-bottom: 16px; }
 .daily-task-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
-.daily-task-card {
+.daily-task-check {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   background: #fbfcf8;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 10px;
+  color: var(--ink);
 }
-.daily-task-card strong { display: block; color: var(--field); margin-bottom: 4px; }
-.daily-task-card p { margin: 8px 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
-.daily-task-actions { margin-top: 12px; }
+.daily-task-check input { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--field); }
+.daily-task-body { display: grid; gap: 3px; min-width: 0; }
+.daily-task-body strong { color: var(--field); line-height: 1.25; }
+.daily-task-body small { color: var(--muted); line-height: 1.35; }
+.daily-task-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.daily-task-actions button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--field);
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
 
 .pill, .status-pill {
   border-radius: 999px;
@@ -379,7 +396,7 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
   .sidebar { position: static; height: auto; padding: 16px; }
   .nav-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sync-card { display: none; }
-  .kpi-grid, .dashboard-grid, .record-grid, .finance-layout, .harvest-layout, .price-layout, .daily-task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-grid, .dashboard-grid, .record-grid, .finance-layout, .harvest-layout, .price-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .span-2 { grid-column: span 2; }
 }
 
@@ -405,13 +422,19 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
   }
   .nav-list::-webkit-scrollbar { display: none; }
   .nav-button {
-    flex: 0 0 auto;
-    width: auto;
-    min-height: 42px;
-    padding: 10px 12px;
+    flex: 0 0 112px;
+    width: 112px;
+    min-height: 50px;
+    padding: 8px 10px;
     background: rgba(255,255,255,0.08);
+    justify-content: center;
   }
-  .nav-button span:last-child { font-size: 0.9rem; }
+  .nav-button span:last-child {
+    display: inline;
+    font-size: 0.82rem;
+    line-height: 1.15;
+    white-space: normal;
+  }
   .main { padding: 16px 12px 24px; }
   .topbar, .section-head { align-items: flex-start; flex-direction: column; }
   .topbar { gap: 14px; margin-bottom: 18px; }
@@ -423,6 +446,7 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
     gap: 8px;
   }
   .top-actions button, .section-actions button { width: 100%; justify-content: center; }
+  .mobile-sync-button { display: inline-flex; align-items: center; justify-content: center; }
   .section-actions { width: 100%; justify-content: flex-start; }
   .period-filter { align-items: stretch; flex-direction: column; }
   .period-filter label { width: 100%; }
@@ -430,6 +454,8 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
   .kpi { padding: 14px; }
   .kpi strong { font-size: 1.45rem; }
   .dashboard-grid, .record-grid, .field-strip, .finance-layout, .harvest-layout, .price-layout, .daily-task-grid, .checkbox-group { grid-template-columns: 1fr; }
+  .daily-task-check { grid-template-columns: auto 1fr; }
+  .daily-task-actions { grid-column: 2; justify-content: flex-start; }
   .span-2 { grid-column: span 1; }
   .panel, .record-card { padding: 14px; }
   .panel-head { align-items: flex-start; flex-direction: column; gap: 8px; }
@@ -520,8 +546,9 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
 }
 
 @media (max-width: 420px) {
-  .nav-button span:last-child { display: none; }
-  .nav-icon { width: 22px; height: 22px; }
+  .nav-button { flex-basis: 104px; width: 104px; }
+  .nav-button span:last-child { display: inline; font-size: 0.78rem; }
+  .nav-icon { width: 20px; height: 20px; }
   .kpi-grid, .filter-bar { grid-template-columns: 1fr; }
   td { grid-template-columns: 1fr; gap: 4px; }
 }

@@ -101,6 +101,8 @@ let editingRecord = null;
 let activeProfileId = localStorage.getItem(activeProfileKey) || "admin-profile";
 let activeUserId = sessionStorage.getItem(authUserKey) || "";
 let syncTimer = null;
+let autoSyncTimer = null;
+let syncInProgress = false;
 let syncState = {
   status: "idle",
   detail: localStorage.getItem(lastRemoteSyncKey) ? `Dernière synchro : ${localStorage.getItem(lastRemoteSyncKey)}` : "Supabase prêt"
@@ -456,7 +458,7 @@ function rememberDeletion(collection, id) {
 
 function collectionForSync(collection, sourceState = state) {
   if (collection === "team") return stripTeamCredentials(sourceState.team || []);
-  if (collection === "userAccounts") return userAccountsFromTeam(sourceState.team || []);
+  if (collection === "userAccounts") return mergeUserAccounts(sourceState.userAccounts || [], sourceState.team || []);
   return sourceState[collection] || [];
 }
 
@@ -485,7 +487,7 @@ function saveState(options = {}) {
   const shouldSync = options.sync !== false;
   if (shouldTouch) state.updatedAt = new Date().toISOString();
   state.deletedRecords = normalizeDeletedRecords(state.deletedRecords);
-  state.userAccounts = userAccountsFromTeam(state.team);
+  state.userAccounts = mergeUserAccounts(state.userAccounts, state.team);
   localStorage.setItem(stateKey, JSON.stringify(state));
   if (shouldSync) scheduleRemoteSave();
 }
@@ -530,8 +532,30 @@ function userAccountsFromTeam(team = []) {
     teamId: person.id,
     login: person.login || "",
     password: person.password || "",
-    profileId: person.profileId || "terrain-profile"
+    profileId: person.profileId || "terrain-profile",
+    updatedAt: person.updatedAt || new Date().toISOString(),
+    updatedBy: person.updatedBy || currentUserLabel()
   }));
+}
+
+function mergeUserAccounts(existingAccounts = [], team = []) {
+  const accountsById = new Map(arrayOrEmpty(existingAccounts).map((account) => [account.id, account]));
+  ensureAdminAccess(team).forEach((person) => {
+    const existing = accountsById.get(person.id) || {};
+    const login = person.login !== undefined ? person.login : existing.login;
+    const password = person.password !== undefined ? person.password : existing.password;
+    accountsById.set(person.id, {
+      ...existing,
+      id: person.id,
+      teamId: person.id,
+      login: login || "",
+      password: password || "",
+      profileId: person.profileId || existing.profileId || "terrain-profile",
+      updatedAt: person.updatedAt || existing.updatedAt || new Date().toISOString(),
+      updatedBy: person.updatedBy || existing.updatedBy || currentUserLabel()
+    });
+  });
+  return Array.from(accountsById.values()).filter((account) => account.id === "admin-user" || account.login || account.password);
 }
 
 function stripTeamCredentials(team = []) {
@@ -773,6 +797,7 @@ function normalizeLoadedState(data) {
   const sourceTeam = withoutRetiredDemoUsers(data.team || starterState.team);
   const sourceAccounts = withoutRetiredDemoAccounts(data.userAccounts || userAccountsFromTeam(sourceTeam));
   const remoteTeam = teamWithUserAccounts(sourceTeam, sourceAccounts);
+  const mergedAccounts = mergeUserAccounts(sourceAccounts, remoteTeam);
   return {
     ...data,
     profiles: mergeDefaultProfiles(data.profiles),
@@ -783,7 +808,7 @@ function normalizeLoadedState(data) {
     stock: arrayOrEmpty(data.stock),
     finance: arrayOrEmpty(data.finance),
     team: ensureAdminAccess(mergeDefaultTeam(remoteTeam)),
-    userAccounts: userAccountsFromTeam(remoteTeam),
+    userAccounts: mergedAccounts,
     dailyTaskTemplates: normalizeDailyTaskTemplates(data.dailyTaskTemplates || dailyTaskTemplates),
     deletedRecords,
     updatedAt: data.updatedAt || new Date().toISOString()
@@ -802,8 +827,8 @@ function mergeRemoteState(remoteData = {}) {
     );
   });
   const mergedAccounts = mergeRecords(
-    userAccountsFromTeam(state.team || []),
-    userAccountsFromTeam(remoteState.team || []),
+    mergeUserAccounts(state.userAccounts || [], state.team || []),
+    mergeUserAccounts(remoteState.userAccounts || [], remoteState.team || []),
     collectionObject(state.deletedRecords.userAccounts)
   );
   const mergedTeam = mergeRecords(
@@ -812,7 +837,7 @@ function mergeRemoteState(remoteData = {}) {
     collectionObject(state.deletedRecords.team)
   );
   state.team = ensureAdminAccess(teamWithUserAccounts(mergedTeam, mergedAccounts));
-  state.userAccounts = userAccountsFromTeam(state.team);
+  state.userAccounts = mergeUserAccounts(mergedAccounts, state.team);
   const localTime = new Date(state.updatedAt || 0).getTime();
   const remoteTime = new Date(remoteState.updatedAt || 0).getTime();
   state.updatedAt = new Date(Math.max(localTime || 0, remoteTime || 0, Date.now())).toISOString();
@@ -962,12 +987,26 @@ function scheduleRemoteSave() {
   }, 700);
 }
 
+function startAutoSync() {
+  window.clearInterval(autoSyncTimer);
+  autoSyncTimer = window.setInterval(() => {
+    if (currentUser() && navigator.onLine) syncFromSupabase();
+  }, 60000);
+}
+
+function stopAutoSync() {
+  window.clearInterval(autoSyncTimer);
+  autoSyncTimer = null;
+}
+
 async function syncFromSupabase() {
   if (!supabaseEnabled()) return;
+  if (syncInProgress) return;
   if (!navigator.onLine) {
     setSyncStatus("offline", "Hors ligne : données conservées sur cet appareil");
     return;
   }
+  syncInProgress = true;
   setSyncStatus("syncing", "Lecture Supabase...");
   try {
     const remoteRow = await fetchRemoteState();
@@ -988,6 +1027,8 @@ async function syncFromSupabase() {
     render();
   } catch (error) {
     setSyncStatus("error", error.message);
+  } finally {
+    syncInProgress = false;
   }
 }
 
@@ -1053,6 +1094,7 @@ function bindEvents() {
     const dailyTasksButton = event.target.closest("#generateDailyTasksBtn");
     const periodResetButton = event.target.closest("[data-period-reset]");
 
+    if (event.target.closest(".daily-task-actions")) event.preventDefault();
     if (targetButton) switchView(targetButton.dataset.target);
     if (modalButton) openModal(modalButton.dataset.modal);
     if (editButton) openModal(editButton.dataset.type, editButton.dataset.edit);
@@ -1080,11 +1122,16 @@ function bindEvents() {
   document.querySelector("#passwordForm").addEventListener("submit", handlePasswordSubmit);
   const syncNowButton = document.querySelector("#syncNowBtn");
   if (syncNowButton) syncNowButton.addEventListener("click", syncFromSupabase);
+  const mobileSyncNowButton = document.querySelector("#mobileSyncNowBtn");
+  if (mobileSyncNowButton) mobileSyncNowButton.addEventListener("click", syncFromSupabase);
   window.addEventListener("online", () => {
     renderConnection();
     syncFromSupabase();
   });
   window.addEventListener("offline", renderConnection);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && currentUser()) syncFromSupabase();
+  });
 }
 
 
@@ -1130,6 +1177,7 @@ function showApp() {
   try {
     ensureAllowedView();
     render();
+    startAutoSync();
     syncFromSupabase();
   } catch (error) {
     document.body.classList.remove("authenticated");
@@ -1184,7 +1232,23 @@ async function loginFromSupabaseAccounts(login, password) {
       });
     }
     saveState({ sync: false, touch: false });
-    return state.team.find((person) => person.id === (account.teamId || account.id)) || null;
+    const personId = account.teamId || account.id;
+    let person = state.team.find((item) => item.id === personId);
+    if (!person) {
+      person = touchRecord({
+        id: personId,
+        name: account.login || "Utilisateur",
+        role: profileRole(account.profileId) || "Terrain",
+        phone: "",
+        profileId: account.profileId || "terrain-profile",
+        login: account.login,
+        password: account.password
+      });
+      state.team.unshift(person);
+      state.userAccounts = mergeUserAccounts(state.userAccounts, state.team);
+      saveState({ sync: false });
+    }
+    return person;
   } catch (error) {
     setSyncStatus("error", `Connexion Supabase impossible : ${error.message}`);
     return null;
@@ -1193,6 +1257,7 @@ async function loginFromSupabaseAccounts(login, password) {
 
 function logout() {
   activeUserId = "";
+  stopAutoSync();
   sessionStorage.removeItem(authUserKey);
   localStorage.removeItem(authUserKey);
   showLogin();
@@ -1232,6 +1297,7 @@ function renderConnection() {
   const statusText = document.querySelector("#statusText");
   const statusDetail = document.querySelector("#statusDetail");
   const syncButton = document.querySelector("#syncNowBtn");
+  const mobileSyncButton = document.querySelector("#mobileSyncNowBtn");
   if (!statusDot || !statusText || !statusDetail) return;
   if (!online) {
     statusDot.style.background = "var(--sun)";
@@ -1254,7 +1320,11 @@ function renderConnection() {
     statusText.textContent = "Mode local prêt";
     statusDetail.textContent = controlled ? "Application disponible hors ligne" : "Données conservées sur cet appareil";
   }
-  if (syncButton) syncButton.disabled = !online || syncState.status === "syncing";
+  [syncButton, mobileSyncButton].forEach((button) => {
+    if (!button) return;
+    button.disabled = !online || syncState.status === "syncing";
+    button.textContent = syncState.status === "syncing" ? "Synchronisation..." : "Synchroniser";
+  });
 }
 
 function renderDashboard() {
@@ -1403,15 +1473,18 @@ function renderDailyTaskBase() {
   if (!container) return;
   const templates = state.dailyTaskTemplates || [];
   container.innerHTML = templates.map((template) => `
-    <article class="daily-task-card">
-      <strong>${template.title}</strong>
-      <span class="muted">${template.crops.length ? template.crops.join(" · ") : "Toutes les cultures"}${template.modes && template.modes.length ? ` · ${template.modes.join(" · ")}` : " · Tous modes"}</span>
-      <p>${template.note}</p>
-      <div class="card-actions daily-task-actions">
-        <button data-edit="${template.id}" data-type="baseTask">Modifier</button>
-        <button data-delete="${template.id}" data-collection="dailyTaskTemplates">Supprimer</button>
-      </div>
-    </article>
+    <label class="daily-task-check">
+      <input type="checkbox" aria-label="${escapeHtml(template.title)}" />
+      <span class="daily-task-body">
+        <strong>${template.title}</strong>
+        <span class="muted">${template.crops.length ? template.crops.join(" · ") : "Toutes les cultures"}${template.modes && template.modes.length ? ` · ${template.modes.join(" · ")}` : " · Tous modes"}</span>
+        ${template.note ? `<small>${template.note}</small>` : ""}
+      </span>
+      <span class="daily-task-actions">
+        <button type="button" data-edit="${template.id}" data-type="baseTask">Modifier</button>
+        <button type="button" data-delete="${template.id}" data-collection="dailyTaskTemplates">Supprimer</button>
+      </span>
+    </label>
   `).join("") || `<p class="muted">Aucune tâche de base enregistrée.</p>`;
 }
 
@@ -1805,6 +1878,11 @@ function profileName(profileId) {
   return profile ? profile.name : "Profil non défini";
 }
 
+function profileRole(profileId) {
+  const profile = state.profiles.find((item) => item.id === profileId);
+  return profile ? profile.role : "";
+}
+
 function profilePages(profile) {
   if (profile.role === "Admin") return defaultPagesByRole.Admin;
   return Array.isArray(profile.pages) && profile.pages.length ? profile.pages : defaultPagesByRole[profile.role] || ["dashboard"];
@@ -2178,6 +2256,9 @@ function handleFormSubmit(event) {
     );
   } else {
     state[config.collection].unshift(touchRecord({ id: createId(), ...data }));
+  }
+  if (modalType === "team") {
+    state.userAccounts = mergeUserAccounts(state.userAccounts, state.team);
   }
   saveState();
   editingRecord = null;

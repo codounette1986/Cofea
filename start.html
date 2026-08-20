@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=80" />
+    <link rel="manifest" href="./manifest.webmanifest?v=82" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=80" />
+    <link rel="stylesheet" href="./styles.css?v=82" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -62,6 +62,7 @@
             <h1 id="pageTitle">Tableau de bord</h1>
           </div>
           <div class="top-actions">
+            <button class="text-button mobile-sync-button" id="mobileSyncNowBtn" type="button">Synchroniser</button>
             <button class="text-button" id="changePasswordBtn">Changer mot de passe</button>
             <button class="text-button" id="logoutBtn">Déconnexion</button>
             <button class="primary-button" id="quickTaskBtn">Nouvelle tâche</button>
@@ -342,7 +343,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v80";
+        var refreshKey = "agripilot-cache-refresh-v82";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -361,7 +362,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=80");
+          window.location.replace("./start.html?v=82");
         });
       })();
     </script>
@@ -386,6 +387,6 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=80" defer></script>
+    <script src="./app.js?v=82" defer></script>
   </body>
 </html>
