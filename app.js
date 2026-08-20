@@ -2466,7 +2466,9 @@ function handleFormSubmit(event) {
 function openPasswordModal() {
   const form = document.querySelector("#passwordForm");
   const message = document.querySelector("#passwordMessage");
+  const person = currentUser();
   form.reset();
+  form.elements.login.value = person ? person.login || "" : "";
   message.textContent = "";
   message.className = "wide-field password-message";
   document.querySelector("#passwordModal").showModal();
@@ -2476,13 +2478,12 @@ async function handlePasswordSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const submitButton = form.querySelector('button[value="default"]');
-  const login = form.elements.login.value.trim();
   const currentPassword = form.elements.currentPassword.value;
   const newPassword = form.elements.newPassword.value;
   const confirmPassword = form.elements.confirmPassword.value;
   const person = currentUser();
-  if (!person || String(person.login || "").trim() !== login || String(person.password || "") !== currentPassword) {
-    showPasswordMessage("Identifiant ou ancien mot de passe incorrect.", "error");
+  if (!person || String(person.password || "") !== currentPassword) {
+    showPasswordMessage("Ancien mot de passe incorrect.", "error");
     return;
   }
   if (newPassword.length < 4) {
@@ -2497,6 +2498,8 @@ async function handlePasswordSubmit(event) {
   state.team = state.team.map((member) =>
     member.id === person.id ? touchRecord({ ...member, password: newPassword }) : member
   );
+  upsertUserAccountForTeamMember(person.id, { password: newPassword });
+  state.userAccounts = mergeUserAccounts(state.userAccounts, state.team);
   if (submitButton) submitButton.disabled = true;
   showPasswordMessage("Mot de passe mis à jour localement. Synchronisation Supabase...", "success");
   saveState({ sync: false });
