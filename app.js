@@ -96,6 +96,13 @@ let periodFilters = {
   finance: { from: "", to: "" },
   prices: { from: "", to: "" }
 };
+let tableSorts = {
+  tasks: { key: "due", direction: "asc" },
+  harvests: { key: "date", direction: "desc" },
+  finance: { key: "date", direction: "desc" },
+  financeByCrop: { key: "crop", direction: "asc" },
+  prices: { key: "date", direction: "desc" }
+};
 let modalType = "task";
 let editingRecord = null;
 let activeProfileId = localStorage.getItem(activeProfileKey) || "admin-profile";
@@ -1455,7 +1462,15 @@ function renderTasks() {
     });
   });
   const periodTasks = state.tasks.filter((task) => dateInPeriod(task.due, "tasks"));
-  const tasks = activeTaskFilter === "Tous" ? periodTasks : periodTasks.filter((task) => task.status === activeTaskFilter);
+  const filteredTasks = activeTaskFilter === "Tous" ? periodTasks : periodTasks.filter((task) => task.status === activeTaskFilter);
+  const tasks = sortRows(filteredTasks, "tasks", {
+    title: (task) => task.title,
+    field: (task) => task.field,
+    owner: (task) => task.owner,
+    due: (task) => task.due,
+    status: (task) => task.status
+  });
+  setupTableSort("tasks", "#tasksView thead", ["title", "field", "owner", "due", "status", null], renderTasks);
   document.querySelector("#tasksTable").innerHTML = tasks.map((task) => `
     <tr>
       <td><strong>${task.title}</strong></td>
@@ -1492,6 +1507,48 @@ function dateInPeriod(dateValue, key) {
   if (!dateValue) return true;
   const filter = periodFilters[key] || {};
   return (!filter.from || dateValue >= filter.from) && (!filter.to || dateValue <= filter.to);
+}
+
+function sortRows(rows, tableKey, accessors) {
+  const sort = tableSorts[tableKey];
+  if (!sort || !sort.key || !accessors[sort.key]) return rows;
+  const direction = sort.direction === "desc" ? -1 : 1;
+  return [...rows].sort((a, b) => compareValues(accessors[sort.key](a), accessors[sort.key](b)) * direction);
+}
+
+function compareValues(a, b) {
+  const first = normalizeSortValue(a);
+  const second = normalizeSortValue(b);
+  if (typeof first === "number" && typeof second === "number") return first - second;
+  return String(first).localeCompare(String(second), "fr", { numeric: true, sensitivity: "base" });
+}
+
+function normalizeSortValue(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value === "number") return value;
+  const numeric = Number(value);
+  if (value !== "" && Number.isFinite(numeric)) return numeric;
+  const date = new Date(`${value}T00:00:00`);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value)) && !Number.isNaN(date.getTime())) return date.getTime();
+  return value;
+}
+
+function setupTableSort(tableKey, headerSelector, columns, renderFn) {
+  const headers = document.querySelectorAll(`${headerSelector} th`);
+  headers.forEach((header, index) => {
+    const column = columns[index];
+    if (!column) return;
+    const active = tableSorts[tableKey] && tableSorts[tableKey].key === column;
+    header.innerHTML = `<button class="sort-header" type="button">${header.textContent.replace(/[▲▼]/g, "").trim()}<span>${active ? tableSorts[tableKey].direction === "asc" ? "▲" : "▼" : ""}</span></button>`;
+    header.querySelector("button").addEventListener("click", () => {
+      const current = tableSorts[tableKey] || {};
+      tableSorts[tableKey] = {
+        key: column,
+        direction: current.key === column && current.direction === "asc" ? "desc" : "asc"
+      };
+      renderFn();
+    });
+  });
 }
 
 function isFieldActive(field) {
@@ -1571,7 +1628,15 @@ function generateDailyTasks() {
   render();
 }
 function renderHarvests() {
-  const harvestRecords = state.harvests.filter((harvest) => dateInPeriod(harvest.date, "harvests"));
+  const harvestRecords = sortRows(state.harvests.filter((harvest) => dateInPeriod(harvest.date, "harvests")), "harvests", {
+    date: (harvest) => harvest.date,
+    field: (harvest) => harvest.field,
+    crop: (harvest) => harvest.crop,
+    quantity: (harvest) => Number(harvest.quantity),
+    quality: (harvest) => harvest.quality,
+    destination: (harvest) => harvest.destination
+  });
+  setupTableSort("harvests", "#harvestsView thead", ["date", "field", "crop", "quantity", "quality", "destination", null], renderHarvests);
   document.querySelector("#harvestSummary").innerHTML = activeFields().map((field) => `
     <div class="summary-line">
       <span>${field.name}</span>
@@ -1610,6 +1675,13 @@ function renderStock() {
 
 function renderFinance() {
   const financeRecords = state.finance.filter((item) => dateInPeriod(item.date, "finance"));
+  const sortedFinanceRecords = sortRows(financeRecords, "finance", {
+    date: (item) => item.date,
+    label: (item) => item.label,
+    crop: (item) => item.crop || "Non affecté",
+    type: (item) => item.type,
+    amount: (item) => Number(item.amount)
+  });
   const revenue = financeRecords.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
   const expense = financeRecords.filter((item) => item.type !== "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
   document.querySelector("#financeSummary").innerHTML = [
@@ -1617,7 +1689,8 @@ function renderFinance() {
     ["Dépenses", money(expense)],
     ["Solde", money(revenue - expense)]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
-  document.querySelector("#financeTable").innerHTML = financeRecords.map((item) => `
+  setupTableSort("finance", "#financeView .finance-layout thead", ["date", "label", "crop", "type", "amount", null], renderFinance);
+  document.querySelector("#financeTable").innerHTML = sortedFinanceRecords.map((item) => `
     <tr>
       <td>${item.date}</td>
       <td>${item.label}</td>
@@ -1627,7 +1700,14 @@ function renderFinance() {
       <td><button class="text-button" data-edit="${item.id}" data-type="finance">Modifier</button><button class="text-button" data-delete="${item.id}" data-collection="finance">Supprimer</button></td>
     </tr>
   `).join("");
-  document.querySelector("#financeByCropTable").innerHTML = financeByCrop(financeRecords).map((item) => `
+  const financeByCropRows = sortRows(financeByCrop(financeRecords), "financeByCrop", {
+    crop: (item) => item.crop,
+    revenue: (item) => item.revenue,
+    expense: (item) => item.expense,
+    balance: (item) => item.revenue - item.expense
+  });
+  setupTableSort("financeByCrop", "#financeView .finance-by-crop thead", ["crop", "revenue", "expense", "balance"], renderFinance);
+  document.querySelector("#financeByCropTable").innerHTML = financeByCropRows.map((item) => `
     <tr>
       <td><strong>${item.crop}</strong></td>
       <td>${money(item.revenue)}</td>
@@ -1653,9 +1733,17 @@ function renderPrices() {
     });
   });
   const datedSales = sales.filter((sale) => dateInPeriod(sale.date, "prices"));
-  const filteredSales = activePriceCrop === "Toutes" ? datedSales : datedSales.filter((sale) => sale.crop === activePriceCrop);
+  const unsortedSales = activePriceCrop === "Toutes" ? datedSales : datedSales.filter((sale) => sale.crop === activePriceCrop);
+  const filteredSales = sortRows(unsortedSales, "prices", {
+    date: (sale) => sale.date,
+    crop: (sale) => sale.crop,
+    amount: (sale) => Number(sale.amount),
+    quantity: (sale) => Number(sale.saleQuantity),
+    price: (sale) => Number(sale.pricePerKg)
+  });
   document.querySelector("#priceSummary").innerHTML = priceSummary(filteredSales);
   document.querySelector("#priceChart").innerHTML = renderPriceChart(filteredSales);
+  setupTableSort("prices", "#pricesView .finance-by-crop thead", ["date", "crop", "amount", "quantity", "price"], renderPrices);
   document.querySelector("#priceSalesTable").innerHTML = filteredSales.map((sale) => `
     <tr>
       <td>${sale.date}</td>

@@ -309,6 +309,20 @@ h2 { font-size: 1.05rem; margin-bottom: 0; }
 table { width: 100%; border-collapse: collapse; min-width: 720px; }
 th, td { padding: 14px 16px; border-bottom: 1px solid var(--line); text-align: left; }
 th { color: var(--muted); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0; }
+.sort-header {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  min-height: 0;
+  font: inherit;
+  text-transform: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.sort-header span { color: var(--field); min-width: 10px; }
 td .text-button + .text-button { margin-left: 6px; }
 
 .finance-layout, .harvest-layout, .price-layout { display: grid; grid-template-columns: 320px 1fr; gap: 18px; }
