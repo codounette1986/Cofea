@@ -578,6 +578,21 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
     border: 1px solid var(--line);
   }
   td .text-button + .text-button { margin-left: 0; }
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+  table { display: table; width: 100%; min-width: 680px; border-collapse: collapse; border-spacing: 0; font-size: 0.82rem; }
+  thead { display: table-header-group; }
+  tbody { display: table-row-group; }
+  tr { display: table-row; margin-bottom: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+  th, td { display: table-cell; width: auto; padding: 10px; border-bottom: 1px solid var(--line); word-break: normal; }
+  td:last-child { border-bottom: 1px solid var(--line); }
+  td::before { content: none !important; }
+  td .text-button { display: inline-flex; width: auto; margin: 0; }
+  td .text-button + .text-button { margin-left: 6px; }
   .form-grid { grid-template-columns: 1fr; }
   dialog {
     width: calc(100vw - 16px);
