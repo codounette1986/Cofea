@@ -1687,7 +1687,8 @@ function renderDashboard() {
     <article class="kpi"><span>${label}</span><strong>${value}</strong></article>
   `).join("");
   renderWeather();
-  document.querySelector("#priorityTasks").innerHTML = state.tasks.slice(0, 4).map(taskItem).join("");
+  const openPriorityTasks = state.tasks.filter((task) => taskStatus(task) !== "Terminé").slice(0, 4);
+  document.querySelector("#priorityTasks").innerHTML = openPriorityTasks.map(taskItem).join("") || `<p class="muted">Aucun travail ouvert.</p>`;
   document.querySelector("#fieldStrip").innerHTML = activeFields.slice(0, 3).map(fieldMini).join("");
   document.querySelector("#stockAlerts").innerHTML = lowStock().map((stock) => `
     <div class="stock-alert"><div><strong>${stock.item}</strong><span class="muted">${stock.quantity} ${stock.unit} restant</span></div><span class="status-pill late">Bas</span></div>
