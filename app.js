@@ -1455,8 +1455,10 @@ function renderDashboard() {
       <strong>${item.total}</strong>
     </div>
   `).join("") || `<p class="muted">Aucune récolte enregistrée pour les cultures actives.</p>`;
-  document.querySelector("#revenueDetailsBtn").hidden = !canSeeFinance();
-  document.querySelector("#revenueCard").innerHTML = canSeeFinance()
+  const showDashboardRevenue = canAccessSection("dashboard:revenues") && canSeeFinance();
+  document.querySelector("#dashboardRevenuePanel").classList.toggle("access-hidden", !showDashboardRevenue);
+  document.querySelector("#revenueDetailsBtn").hidden = !showDashboardRevenue;
+  document.querySelector("#revenueCard").innerHTML = showDashboardRevenue
     ? `
       <strong>${money(revenues)}</strong>
       <span>Revenus enregistrés</span>
@@ -1839,6 +1841,7 @@ function renderPrices() {
 }
 
 function renderTeam() {
+  const canEditTeam = canManageTeam();
   document.querySelector("#teamGrid").innerHTML = state.team.map((person) => `
     <article class="record-card">
       <strong>${person.name}</strong>
@@ -1848,10 +1851,10 @@ function renderTeam() {
         ${canManageProfiles() ? `<span class="pill">${profileName(person.profileId)}</span>` : ""}
       </div>
       ${canManageProfiles() ? `<p class="field-update">Identifiant : ${person.login || "Non défini"}</p>` : ""}
-      <div class="card-actions">
+      ${canEditTeam ? `<div class="card-actions">
         <button data-edit="${person.id}" data-type="team">Modifier</button>
         ${person.id === "admin-user" || person.id === activeUserId ? "" : `<button data-delete="${person.id}" data-collection="team">Supprimer</button>`}
-      </div>
+      </div>` : ""}
     </article>
   `).join("");
 }
@@ -2071,7 +2074,8 @@ function profileSections(profile) {
   const pages = profilePages(profile);
   if (profile.role === "Admin") return allSectionsForPages(pages);
   if (Array.isArray(profile.sections)) return profile.sections;
-  return allSectionsForPages(pages);
+  const sections = allSectionsForPages(pages);
+  return profilePages(profile).includes("finance") ? sections : sections.filter((section) => section !== "dashboard:revenues");
 }
 
 function canAccessSection(sectionId) {
@@ -2102,6 +2106,10 @@ function canManageProfiles() {
   return currentProfile().role === "Admin";
 }
 
+function canManageTeam() {
+  return currentProfile().role === "Admin";
+}
+
 function canAccessView(view) {
   const profile = currentProfile();
   if (view === "profiles") return canManageProfiles();
@@ -2126,6 +2134,7 @@ function applySectionAccess() {
     ["#fieldStrip", "dashboard:fields"],
     ["#stockAlerts", "dashboard:stock"],
     ["#cultureHarvests", "dashboard:harvests"],
+    ["#dashboardRevenuePanel", "dashboard:revenues"],
     ["#revenueCard", "dashboard:revenues"],
     ["#revenueDetailsBtn", "dashboard:revenues"],
     ["#fieldsGrid", "fields:list"],
@@ -2184,6 +2193,9 @@ function applySectionAccess() {
       node.classList.toggle("access-hidden", !canAccessSection(sectionId));
     });
   });
+  document.querySelectorAll('[data-modal="team"], [data-edit][data-type="team"], [data-delete][data-collection="team"]').forEach((node) => {
+    node.classList.toggle("access-hidden", !canManageTeam());
+  });
 }
 
 function renderProfileSelect() {
@@ -2208,6 +2220,7 @@ function accessDescription(role) {
 function openModal(type, id = null) {
   const saleShortcut = type === "sale";
   modalType = saleShortcut ? "finance" : type;
+  if (modalType === "team" && !canManageTeam()) return;
   const config = modalConfig[modalType];
   const record = id ? state[config.collection].find((item) => item.id === id) : null;
   const saleDefaults = saleShortcut ? { type: "Recette", isSale: "on", saleUnit: "kg" } : {};
@@ -2381,6 +2394,7 @@ function escapeHtml(value) {
 function handleFormSubmit(event) {
   event.preventDefault();
   const config = modalConfig[modalType];
+  if (modalType === "team" && !canManageTeam()) return;
   const data = Object.fromEntries(new FormData(event.currentTarget).entries());
   config.fields.forEach(([name, , typeName]) => {
     if (typeName === "number") data[name] = Number(data[name]);
@@ -2513,6 +2527,7 @@ function showPasswordMessage(text, type) {
 }
 
 function deleteRecord(collection, id) {
+  if (collection === "team" && !canManageTeam()) return;
   state[collection] = state[collection].filter((item) => item.id !== id);
   rememberDeletion(collection, id);
   if (collection === "team") rememberDeletion("userAccounts", id);

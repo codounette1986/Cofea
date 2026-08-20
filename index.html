@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=88" />
+    <link rel="manifest" href="./manifest.webmanifest?v=90" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=88" />
+    <link rel="stylesheet" href="./styles.css?v=90" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -97,7 +97,7 @@
               </div>
               <div class="field-strip" id="fieldStrip"></div>
             </section>
-            <section class="panel">
+            <section class="panel" id="dashboardRevenuePanel">
               <div class="panel-head">
                 <h2>Alertes stock</h2>
                 <button class="text-button" data-target="stock">Inventaire</button>
@@ -340,7 +340,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v88";
+        var refreshKey = "agripilot-cache-refresh-v90";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -359,7 +359,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=88");
+          window.location.replace("./start.html?v=90");
         });
       })();
     </script>
@@ -384,6 +384,6 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=88" defer></script>
+    <script src="./app.js?v=90" defer></script>
   </body>
 </html>
