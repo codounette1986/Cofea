@@ -48,6 +48,7 @@ create table if not exists public.tasks (
 create table if not exists public.daily_task_templates (
   id text primary key,
   title text,
+  active boolean,
   crops jsonb,
   modes jsonb,
   note text,
@@ -188,6 +189,7 @@ alter table public.tasks add column if not exists due date;
 alter table public.tasks add column if not exists status text;
 
 alter table public.daily_task_templates add column if not exists title text;
+alter table public.daily_task_templates add column if not exists active boolean;
 alter table public.daily_task_templates add column if not exists crops jsonb;
 alter table public.daily_task_templates add column if not exists modes jsonb;
 alter table public.daily_task_templates add column if not exists note text;
