@@ -1184,9 +1184,11 @@ function bindEvents() {
     const toggleCropButton = event.target.closest("[data-toggle-crop]");
     const periodResetButton = event.target.closest("[data-period-reset]");
     const closeDialogButton = event.target.closest("[data-close-dialog]");
+    const passwordToggleButton = event.target.closest("[data-toggle-password]");
 
     if (event.target.closest(".daily-task-actions")) event.preventDefault();
     if (closeDialogButton) closeDialog(closeDialogButton.dataset.closeDialog);
+    if (passwordToggleButton) togglePasswordVisibility(passwordToggleButton);
     if (targetButton) switchView(targetButton.dataset.target);
     if (modalButton) openModal(modalButton.dataset.modal);
     if (editButton) openModal(editButton.dataset.type, editButton.dataset.edit);
@@ -2767,10 +2769,31 @@ function openPasswordModal() {
   const message = document.querySelector("#passwordMessage");
   const person = currentUser();
   form.reset();
+  form.querySelectorAll("[data-toggle-password]").forEach((button) => {
+    const input = form.elements[button.dataset.togglePassword];
+    if (input) input.type = "password";
+    button.classList.remove("active");
+    button.setAttribute("aria-label", button.dataset.togglePassword === "confirmPassword" ? "Afficher la confirmation" : "Afficher le nouveau mot de passe");
+  });
   form.elements.login.value = person ? person.login || "" : "";
   message.textContent = "";
   message.className = "wide-field password-message";
   document.querySelector("#passwordModal").showModal();
+}
+
+function togglePasswordVisibility(button) {
+  const form = button.closest("form");
+  const input = form && form.elements[button.dataset.togglePassword];
+  if (!input) return;
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  button.classList.toggle("active", show);
+  button.setAttribute("aria-label", show ? "Masquer le mot de passe" : "Afficher le mot de passe");
+}
+
+function passwordForCurrentUser(person) {
+  const account = arrayOrEmpty(state.userAccounts).find((item) => item.id === person.id || item.teamId === person.id || item.login === person.login);
+  return account && account.password !== undefined ? String(account.password || "") : String(person.password || "");
 }
 
 async function handlePasswordSubmit(event) {
@@ -2781,7 +2804,7 @@ async function handlePasswordSubmit(event) {
   const newPassword = form.elements.newPassword.value;
   const confirmPassword = form.elements.confirmPassword.value;
   const person = currentUser();
-  if (!person || String(person.password || "") !== currentPassword) {
+  if (!person || passwordForCurrentUser(person) !== currentPassword) {
     showPasswordMessage("Ancien mot de passe incorrect.", "error");
     return;
   }
