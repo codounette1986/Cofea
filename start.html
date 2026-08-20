@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=83" />
+    <link rel="manifest" href="./manifest.webmanifest?v=88" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=83" />
+    <link rel="stylesheet" href="./styles.css?v=88" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -140,9 +140,6 @@
         <section class="view" id="tasksView">
           <div class="section-head">
             <h2>Planning des travaux</h2>
-            <div class="section-actions">
-              <button class="text-button" id="generateDailyTasksBtn">Créer les tâches du jour</button>
-              <button class="primary-button" data-modal="task">Ajouter une tâche</button></div>
           </div>
           <div class="panel daily-task-panel">
             <div class="panel-head">
@@ -310,11 +307,11 @@
       <form method="dialog" class="modal-card" id="recordForm">
         <div class="modal-head">
           <h2 id="modalTitle">Ajouter</h2>
-          <button class="icon-only" value="cancel" aria-label="Fermer">x</button>
+          <button class="icon-only" type="button" data-close-dialog="recordModal" onclick="document.getElementById('recordModal').close()" aria-label="Fermer">x</button>
         </div>
         <div class="form-grid" id="modalFields"></div>
         <menu class="modal-actions">
-          <button value="cancel">Annuler</button>
+          <button type="button" data-close-dialog="recordModal" onclick="document.getElementById('recordModal').close()">Annuler</button>
           <button class="primary-button" id="saveRecordBtn" value="default">Enregistrer</button>
         </menu>
       </form>
@@ -325,7 +322,7 @@
       <form method="dialog" class="modal-card" id="passwordForm">
         <div class="modal-head">
           <h2>Changer mot de passe</h2>
-          <button class="icon-only" value="cancel" aria-label="Fermer">x</button>
+          <button class="icon-only" type="button" data-close-dialog="passwordModal" onclick="document.getElementById('passwordModal').close()" aria-label="Fermer">x</button>
         </div>
         <div class="form-grid">
           <label>Identifiant<input name="login" type="text" required autocomplete="username" /></label>
@@ -335,7 +332,7 @@
           <p class="wide-field password-message" id="passwordMessage"></p>
         </div>
         <menu class="modal-actions">
-          <button value="cancel">Annuler</button>
+          <button type="button" data-close-dialog="passwordModal" onclick="document.getElementById('passwordModal').close()">Annuler</button>
           <button class="primary-button" value="default">Mettre à jour</button>
         </menu>
       </form>
@@ -343,7 +340,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v83";
+        var refreshKey = "agripilot-cache-refresh-v88";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -362,7 +359,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=83");
+          window.location.replace("./start.html?v=88");
         });
       })();
     </script>
@@ -387,6 +384,6 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=83" defer></script>
+    <script src="./app.js?v=88" defer></script>
   </body>
 </html>

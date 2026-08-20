@@ -2,6 +2,7 @@
 const activeProfileKey = "agripilot-active-profile-v1";
 const authUserKey = "agripilot-auth-user-v1";
 const lastRemoteSyncKey = "agripilot-last-remote-sync-v1";
+const deletionRetentionDays = 30;
 
 const supabaseConfig = {
   url: "https://zulvxofvazgsllibodfp.supabase.co",
@@ -350,6 +351,7 @@ function loadState() {
   const sourceTeam = withoutRetiredDemoUsers(parsed.team || starterState.team);
   const sourceAccounts = withoutRetiredDemoAccounts(parsed.userAccounts || userAccountsFromTeam(sourceTeam));
   const localTeam = teamWithUserAccounts(sourceTeam, sourceAccounts);
+  const localAccounts = mergeUserAccounts(sourceAccounts, localTeam);
   return {
     ...parsed,
     profiles: mergeDefaultProfiles(parsed.profiles),
@@ -360,7 +362,7 @@ function loadState() {
     stock: arrayOrEmpty(parsed.stock),
     finance: arrayOrEmpty(parsed.finance),
     team: ensureAdminAccess(mergeDefaultTeam(localTeam)),
-    userAccounts: userAccountsFromTeam(localTeam),
+    userAccounts: localAccounts,
     dailyTaskTemplates: normalizeDailyTaskTemplates(parsed.dailyTaskTemplates || dailyTaskTemplates),
     deletedRecords: mergeDeletedRecords(parsed.deletedRecords, parsedDeletedRecords),
     updatedAt: parsed.updatedAt || new Date().toISOString()
@@ -433,6 +435,7 @@ function touchRecord(record, timestamp = new Date().toISOString()) {
 }
 
 function currentUserLabel() {
+  if (!state || !Array.isArray(state.team)) return "Système";
   const user = currentUser && currentUser();
   if (!user) return "Système";
   return user.name || user.login || user.role || "Utilisateur";
@@ -465,7 +468,7 @@ function rememberDeletion(collection, id) {
 
 function collectionForSync(collection, sourceState = state) {
   if (collection === "team") return stripTeamCredentials(sourceState.team || []);
-  if (collection === "userAccounts") return mergeUserAccounts(sourceState.userAccounts || [], sourceState.team || []);
+  if (collection === "userAccounts") return mergeUserAccounts(sourceState.userAccounts || [], sourceState.team || []).filter(keepAccount);
   return sourceState[collection] || [];
 }
 
@@ -545,8 +548,12 @@ function userAccountsFromTeam(team = []) {
   }));
 }
 
+function keepAccount(account) {
+  return account && (account.id === "admin-user" || account.login || account.password);
+}
+
 function mergeUserAccounts(existingAccounts = [], team = []) {
-  const accountsById = new Map(arrayOrEmpty(existingAccounts).map((account) => [account.id, account]));
+  const accountsById = new Map(arrayOrEmpty(existingAccounts).filter(keepAccount).map((account) => [account.id, account]));
   ensureAdminAccess(team).forEach((person) => {
     const existing = accountsById.get(person.id) || {};
     const login = person.login !== undefined ? person.login : existing.login;
@@ -562,7 +569,22 @@ function mergeUserAccounts(existingAccounts = [], team = []) {
       updatedBy: person.updatedBy || existing.updatedBy || currentUserLabel()
     });
   });
-  return Array.from(accountsById.values()).filter((account) => account.id === "admin-user" || account.login || account.password);
+  return Array.from(accountsById.values()).filter(keepAccount);
+}
+
+function upsertUserAccountForTeamMember(memberId, data = {}) {
+  if (!data.login && !data.password && memberId !== "admin-user") return;
+  const timestamp = new Date().toISOString();
+  const existing = arrayOrEmpty(state.userAccounts).find((account) => account.id === memberId) || {};
+  const account = touchRecord({
+    ...existing,
+    id: memberId,
+    teamId: memberId,
+    login: data.login !== undefined ? data.login : existing.login || "",
+    password: data.password !== undefined ? data.password : existing.password || "",
+    profileId: data.profileId || existing.profileId || defaultTeamProfileId()
+  }, timestamp);
+  state.userAccounts = [account, ...arrayOrEmpty(state.userAccounts).filter((item) => item.id !== memberId)];
 }
 
 function stripTeamCredentials(team = []) {
@@ -570,7 +592,7 @@ function stripTeamCredentials(team = []) {
 }
 
 function teamWithUserAccounts(team = [], accounts = []) {
-  const accountsByTeamId = new Map(accounts.map((account) => [account.teamId || account.id, account]));
+  const accountsByTeamId = new Map(accounts.filter(keepAccount).map((account) => [account.teamId || account.id, account]));
   return team.map((person) => {
     const account = accountsByTeamId.get(person.id);
     return account ? {
@@ -885,7 +907,8 @@ async function fetchRemoteCollection(collection, options = {}) {
   const table = supabaseConfig.tables[collection];
   const rows = await readRemoteRows(table);
   const records = rows.map((row) => remoteRowToRecord(collection, row));
-  return options.includeDeleted ? records : records.filter((row) => !row.deletedAt);
+  const visibleRecords = options.includeDeleted ? records : records.filter((row) => !row.deletedAt);
+  return collection === "userAccounts" ? visibleRecords.filter(keepAccount) : visibleRecords;
 }
 
 async function fetchRemoteState() {
@@ -898,12 +921,42 @@ async function fetchRemoteState() {
   return { data: remoteData, updated_at: remoteMeta.updated_at };
 }
 
+function isExpiredDeletion(row) {
+  if (!row.deletedAt) return false;
+  const deletedTime = new Date(row.deletedAt).getTime();
+  return Number.isFinite(deletedTime) && deletedTime < Date.now() - deletionRetentionDays * 24 * 60 * 60 * 1000;
+}
+
+async function purgeExpiredDeletedRows(collection, rows) {
+  const expiredRows = rows.filter(isExpiredDeletion);
+  if (!expiredRows.length) return rows;
+  const table = supabaseConfig.tables[collection];
+  for (const row of expiredRows) {
+    const response = await supabaseRequest(`${remoteTableUrl(table)}?id=eq.${encodeURIComponent(row.id)}`, {
+      method: "DELETE",
+      headers: supabaseHeaders({ Prefer: "return=minimal" })
+    });
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`Nettoyage définitif ${table} impossible (${await responseErrorText(response)})`);
+    }
+    if (state.deletedRecords && state.deletedRecords[collection]) delete state.deletedRecords[collection][row.id];
+  }
+  return rows.filter((row) => !isExpiredDeletion(row));
+}
+
 async function replaceRemoteCollection(collection) {
   const table = supabaseConfig.tables[collection];
   const source = collectionForSync(collection, state);
   const remoteRowsRaw = await readRemoteRows(table).catch(() => []);
-  const remoteRows = remoteRowsRaw.map((row) => remoteRowToRecord(collection, row));
+  let remoteRows = remoteRowsRaw.map((row) => remoteRowToRecord(collection, row));
+  remoteRows = await purgeExpiredDeletedRows(collection, remoteRows);
   const deletedRows = collectionObject((state.deletedRecords || {})[collection]);
+  if (collection === "userAccounts") {
+    remoteRows.filter((row) => !keepAccount(row)).forEach((row) => {
+      deletedRows[row.id] = new Date().toISOString();
+    });
+    remoteRows = remoteRows.filter(keepAccount);
+  }
   const appliedDeletedRows = { ...deletedRows };
 
   if (!source.length && !Object.keys(deletedRows).length) {
@@ -1098,10 +1151,11 @@ function bindEvents() {
     const completeButton = event.target.closest("[data-complete]");
     const toggleFieldButton = event.target.closest("[data-toggle-field]");
     const toggleCropButton = event.target.closest("[data-toggle-crop]");
-    const dailyTasksButton = event.target.closest("#generateDailyTasksBtn");
     const periodResetButton = event.target.closest("[data-period-reset]");
+    const closeDialogButton = event.target.closest("[data-close-dialog]");
 
     if (event.target.closest(".daily-task-actions")) event.preventDefault();
+    if (closeDialogButton) closeDialog(closeDialogButton.dataset.closeDialog);
     if (targetButton) switchView(targetButton.dataset.target);
     if (modalButton) openModal(modalButton.dataset.modal);
     if (editButton) openModal(editButton.dataset.type, editButton.dataset.edit);
@@ -1109,8 +1163,13 @@ function bindEvents() {
     if (completeButton) completeTask(completeButton.dataset.complete);
     if (toggleFieldButton) toggleField(toggleFieldButton.dataset.toggleField);
     if (toggleCropButton) toggleCrop(toggleCropButton.dataset.toggleCrop);
-    if (dailyTasksButton) generateDailyTasks();
     if (periodResetButton) resetPeriodFilter(periodResetButton.dataset.periodReset);
+  });
+  document.body.addEventListener("change", (event) => {
+    const baseTaskCheckbox = event.target.closest("[data-base-task-check]");
+    if (!baseTaskCheckbox) return;
+    if (baseTaskCheckbox.checked) createCompletedBaseTask(baseTaskCheckbox.dataset.baseTaskCheck);
+    else renderDailyTaskBase();
   });
   const handlePeriodInput = (event) => {
     const periodInput = event.target.closest("[data-period-key]");
@@ -1127,6 +1186,23 @@ function bindEvents() {
   document.querySelector("#recordForm").addEventListener("submit", handleFormSubmit);
   document.querySelector("#changePasswordBtn").addEventListener("click", openPasswordModal);
   document.querySelector("#passwordForm").addEventListener("submit", handlePasswordSubmit);
+  document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+    const closeHandler = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeDialog(button.dataset.closeDialog);
+    };
+    button.addEventListener("click", closeHandler);
+    button.addEventListener("touchend", closeHandler);
+  });
+  ["recordModal", "passwordModal"].forEach((dialogId) => {
+    const dialog = document.querySelector(`#${dialogId}`);
+    if (dialog) {
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) closeDialog(dialogId);
+      });
+    }
+  });
   const syncNowButton = document.querySelector("#syncNowBtn");
   if (syncNowButton) syncNowButton.addEventListener("click", syncFromSupabase);
   const mobileSyncNowButton = document.querySelector("#mobileSyncNowBtn");
@@ -1139,6 +1215,21 @@ function bindEvents() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && currentUser()) syncFromSupabase();
   });
+}
+
+function closeDialog(dialogId) {
+  const dialog = document.querySelector(`#${dialogId}`);
+  if (dialog) {
+    try {
+      if (dialog.open && dialog.close) dialog.close();
+    } catch (error) {
+      dialog.removeAttribute("open");
+    }
+    if (dialog.open) dialog.removeAttribute("open");
+    const form = dialog.querySelector("form");
+    if (form) form.reset();
+  }
+  if (dialogId === "recordModal") editingRecord = null;
 }
 
 
@@ -1489,7 +1580,7 @@ function renderDailyTaskBase() {
   const templates = state.dailyTaskTemplates || [];
   container.innerHTML = templates.map((template) => `
     <label class="daily-task-check">
-      <input type="checkbox" aria-label="${escapeHtml(template.title)}" />
+      <input type="checkbox" data-base-task-check="${template.id}" aria-label="${escapeHtml(template.title)}" ${baseTaskDoneToday(template) ? "checked" : ""} />
       <span class="daily-task-body">
         <strong>${template.title}</strong>
         <span class="muted">${template.crops.length ? template.crops.join(" · ") : "Toutes les cultures"}${template.modes && template.modes.length ? ` · ${template.modes.join(" · ")}` : " · Tous modes"}</span>
@@ -1501,6 +1592,32 @@ function renderDailyTaskBase() {
       </span>
     </label>
   `).join("") || `<p class="muted">Aucune tâche de base enregistrée.</p>`;
+}
+
+function baseTaskDoneToday(template) {
+  const today = currentDateValue();
+  return state.tasks.some((task) => task.due === today && (task.baseTaskId === template.id || task.title === template.title));
+}
+
+function createCompletedBaseTask(templateId) {
+  const template = (state.dailyTaskTemplates || []).find((item) => item.id === templateId);
+  if (!template) return;
+  if (baseTaskDoneToday(template)) {
+    renderDailyTaskBase();
+    return;
+  }
+  state.tasks.unshift(touchRecord({
+    id: createId(),
+    baseTaskId: template.id,
+    title: template.title,
+    field: template.crops && template.crops.length ? template.crops.join(", ") : "Toutes les cultures",
+    owner: currentUserLabel(),
+    due: currentDateValue(),
+    status: "Terminé"
+  }));
+  activeTaskFilter = "Tous";
+  saveState();
+  render();
 }
 
 function dateInPeriod(dateValue, key) {
@@ -1593,40 +1710,6 @@ function currentDateValue() {
   return `${today.getFullYear()}-${month}-${day}`;
 }
 
-function dailyTasksForField(field) {
-  if (!isCropActive(field.crop)) return [];
-  return (state.dailyTaskTemplates || [])
-    .filter((template) => !template.crops || !template.crops.length || template.crops.includes(field.crop))
-    .filter((template) => !template.modes || !template.modes.length || template.modes.includes(field.mode || "Plein champ"))
-    .map((template) => ({
-      title: `${template.title} - ${field.name}`,
-      field: field.name,
-      owner: state.team[0] ? state.team[0].name : "À assigner",
-      due: currentDateValue(),
-      status: "À faire"
-    }));
-}
-
-function generateDailyTasks() {
-  const due = currentDateValue();
-  const existingKeys = new Set(state.tasks.map((task) => `${task.title}|${task.field}|${task.due}`));
-  const tasksToAdd = activeFields().flatMap(dailyTasksForField).filter((task) => {
-    const key = `${task.title}|${task.field}|${due}`;
-    return !existingKeys.has(key);
-  });
-  if (!tasksToAdd.length) {
-    const button = document.querySelector("#generateDailyTasksBtn");
-    if (button) {
-      button.textContent = "Déjà créé pour aujourd'hui";
-      window.setTimeout(() => { button.textContent = "Créer les tâches du jour"; }, 1800);
-    }
-    return;
-  }
-  state.tasks = tasksToAdd.map((task) => ({ id: createId(), ...task })).concat(state.tasks);
-  activeTaskFilter = "Tous";
-  saveState();
-  render();
-}
 function renderHarvests() {
   const harvestRecords = sortRows(state.harvests.filter((harvest) => dateInPeriod(harvest.date, "harvests")), "harvests", {
     date: (harvest) => harvest.date,
@@ -1961,6 +2044,10 @@ function profileOptions() {
   return state.profiles.map((profile) => ({ value: profile.id, label: `${profile.name} - ${profile.role}` }));
 }
 
+function defaultTeamProfileId() {
+  return state.profiles.some((profile) => profile.id === "terrain-profile") ? "terrain-profile" : (state.profiles.find((profile) => profile.role === "Terrain") || state.profiles[0] || {}).id || "terrain-profile";
+}
+
 function profileName(profileId) {
   const profile = state.profiles.find((item) => item.id === profileId);
   return profile ? profile.name : "Profil non défini";
@@ -2047,7 +2134,6 @@ function applySectionAccess() {
     ['[data-modal="crop"]', "crops:form"],
     ["#tasksView .daily-task-panel", "tasks:base"],
     ["#dailyTaskBase", "tasks:base"],
-    ["#generateDailyTasksBtn", "tasks:form"],
     ['[data-modal="baseTask"]', "tasks:form"],
     ["#taskPeriodFilters", "tasks:filters"],
     ["#taskFilters", "tasks:filters"],
@@ -2153,7 +2239,8 @@ function openModal(type, id = null) {
     }
     if (typeName === "profileSelect") {
       const options = profileOptions();
-      return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option.label, value, option.value)).join("")}</select></label>`;
+      const selectedProfile = value || (!record && modalType === "team" ? defaultTeamProfileId() : "");
+      return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option.label, selectedProfile, option.value)).join("")}</select></label>`;
     }
     if (typeName === "fieldSelect") {
       const fieldOptions = fieldOptionsForSelect(value);
@@ -2314,6 +2401,11 @@ function handleFormSubmit(event) {
     delete data.login;
     delete data.password;
   }
+  if (modalType === "team" && canManageProfiles()) {
+    data.profileId = data.profileId || defaultTeamProfileId();
+    data.login = String(data.login || "").trim();
+    data.password = String(data.password || "");
+  }
   if (modalType === "crop") {
     data.active = Boolean(event.currentTarget.elements.active && event.currentTarget.elements.active.checked);
   }
@@ -2337,15 +2429,17 @@ function handleFormSubmit(event) {
       if (data.saleUnit === "tonnes") data.saleKgEquivalent = Number(data.saleQuantity) * 1000;
     }
   }
+  let savedRecordId = editingRecord ? editingRecord.id : createId();
   if (editingRecord) {
     const timestamp = new Date().toISOString();
     state[config.collection] = state[config.collection].map((item) =>
       item.id === editingRecord.id ? touchRecord({ ...item, ...data }, timestamp) : item
     );
   } else {
-    state[config.collection].unshift(touchRecord({ id: createId(), ...data }));
+    state[config.collection].unshift(touchRecord({ id: savedRecordId, ...data }));
   }
   if (modalType === "team") {
+    upsertUserAccountForTeamMember(savedRecordId, data);
     state.userAccounts = mergeUserAccounts(state.userAccounts, state.team);
   }
   saveState();
