@@ -218,6 +218,8 @@ const accessSections = {
     { id: "finance:summary", label: "Résumé financier" },
     { id: "finance:operations", label: "Tableau des opérations" },
     { id: "finance:byCrop", label: "Recettes et dépenses par culture" },
+    { id: "finance:allOperations", label: "Voir toutes les opérations" },
+    { id: "finance:ownOperations", label: "Voir seulement ses opérations" },
     { id: "finance:write", label: "Ajout / modification" },
     { id: "finance:delete", label: "Suppression" }
   ],
@@ -2023,7 +2025,7 @@ function renderStock() {
 }
 
 function renderFinance() {
-  const financeRecords = state.finance.filter((item) => dateInPeriod(item.date, "finance"));
+  const financeRecords = financeRecordsForCurrentAccess().filter((item) => dateInPeriod(item.date, "finance"));
   const sortedFinanceRecords = sortRows(financeRecords, "finance", {
     date: (item) => item.date,
     label: (item) => item.label,
@@ -2048,7 +2050,7 @@ function renderFinance() {
       <td>${money(Number(item.amount))}</td>
       <td><button class="text-button" data-edit="${item.id}" data-type="finance">Modifier</button><button class="text-button" data-delete="${item.id}" data-collection="finance">Supprimer</button></td>
     </tr>
-  `).join("");
+  `).join("") || `<tr><td colspan="6">Aucune opération sur cette période.</td></tr>`;
   const financeByCropRows = sortRows(financeByCrop(financeRecords), "financeByCrop", {
     crop: (item) => item.crop,
     revenue: (item) => item.revenue,
@@ -2064,6 +2066,32 @@ function renderFinance() {
       <td><strong>${money(item.revenue - item.expense)}</strong></td>
     </tr>
   `).join("");
+}
+
+function financeRecordsForCurrentAccess() {
+  if (canSeeAllFinanceOperations()) return state.finance;
+  return state.finance.filter(recordBelongsToCurrentUser);
+}
+
+function canSeeAllFinanceOperations() {
+  const sections = profileSections(currentProfile());
+  const hasOwnScope = sections.includes("finance:ownOperations");
+  const hasAllScope = sections.includes("finance:allOperations");
+  return currentProfile().role === "Admin" || hasAllScope || !hasOwnScope;
+}
+
+function recordBelongsToCurrentUser(record) {
+  const user = currentUser();
+  if (!user) return false;
+  const updatedBy = String(record.updatedBy || "").trim().toLowerCase();
+  const aliases = [currentUserLabel(), user.name, user.login, user.role, user.id]
+    .filter(Boolean)
+    .map((value) => String(value).trim().toLowerCase());
+  return aliases.includes(updatedBy);
+}
+
+function canAccessFinanceRecord(record) {
+  return canSeeAllFinanceOperations() || recordBelongsToCurrentUser(record);
 }
 
 function renderPrices() {
@@ -2542,6 +2570,7 @@ function openModal(type, id = null) {
   const config = modalConfig[modalType];
   const rawRecord = id ? state[config.collection].find((item) => item.id === id) : null;
   const record = rawRecord && modalType === "team" ? teamRecordWithAccount(rawRecord) : rawRecord;
+  if (modalType === "finance" && record && !canAccessFinanceRecord(record)) return;
   const saleDefaults = saleShortcut ? { type: "Recette", isSale: "on", saleUnit: "kg" } : {};
   editingRecord = record ? { collection: config.collection, id } : null;
   document.querySelector("#modalTitle").textContent = saleShortcut ? "Ajouter une vente" : record ? config.title.replace("Ajouter", "Modifier") : config.title;
@@ -2896,6 +2925,10 @@ function showPasswordMessage(text, type) {
 
 function deleteRecord(collection, id) {
   if (!canDeleteCollection(collection)) return;
+  if (collection === "finance") {
+    const record = state.finance.find((item) => item.id === id);
+    if (record && !canAccessFinanceRecord(record)) return;
+  }
   if (collection === "team" && !canManageTeam()) return;
   state[collection] = state[collection].filter((item) => item.id !== id);
   rememberDeletion(collection, id);
