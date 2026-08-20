@@ -107,6 +107,7 @@ let tableSorts = {
   prices: { key: "date", direction: "desc" }
 };
 let modalType = "task";
+let modalAccessType = "task";
 let editingRecord = null;
 let activeProfileId = localStorage.getItem(activeProfileKey) || "admin-profile";
 let activeUserId = sessionStorage.getItem(authUserKey) || "";
@@ -187,43 +188,50 @@ const accessSections = {
   ],
   fields: [
     { id: "fields:list", label: "Liste des parcelles" },
-    { id: "fields:form", label: "Ajout et modification" }
+    { id: "fields:write", label: "Ajout / modification" },
+    { id: "fields:delete", label: "Suppression" }
   ],
   crops: [
     { id: "crops:list", label: "Base des cultures" },
-    { id: "crops:form", label: "Ajout et modification" }
+    { id: "crops:write", label: "Ajout / modification" },
+    { id: "crops:delete", label: "Suppression" }
   ],
   tasks: [
     { id: "tasks:base", label: "Base quotidienne" },
     { id: "tasks:filters", label: "Filtres des travaux" },
     { id: "tasks:list", label: "Planning des travaux" },
-    { id: "tasks:form", label: "Ajout et modification" }
+    { id: "tasks:write", label: "Ajout / modification" },
+    { id: "tasks:delete", label: "Suppression" }
   ],
   harvests: [
     { id: "harvests:summary", label: "Résumé par parcelle" },
     { id: "harvests:table", label: "Historique des récoltes" },
-    { id: "harvests:form", label: "Ajout et modification" }
+    { id: "harvests:write", label: "Ajout / modification" },
+    { id: "harvests:delete", label: "Suppression" }
   ],
   stock: [
     { id: "stock:list", label: "Inventaire" },
-    { id: "stock:form", label: "Ajout et modification" }
+    { id: "stock:write", label: "Ajout / modification" },
+    { id: "stock:delete", label: "Suppression" }
   ],
   finance: [
     { id: "finance:summary", label: "Résumé financier" },
     { id: "finance:operations", label: "Tableau des opérations" },
     { id: "finance:byCrop", label: "Recettes et dépenses par culture" },
-    { id: "finance:form", label: "Ajout et modification" }
+    { id: "finance:write", label: "Ajout / modification" },
+    { id: "finance:delete", label: "Suppression" }
   ],
   prices: [
     { id: "prices:filters", label: "Filtre par culture" },
     { id: "prices:chart", label: "Courbe du prix/kg" },
     { id: "prices:sales", label: "Tableau des ventes" },
-    { id: "prices:form", label: "Ajout de vente" }
+    { id: "prices:write", label: "Ajout / modification" }
   ],
   team: [
     
     { id: "team:list", label: "Liste de l'équipe" },
-    { id: "team:form", label: "Ajout et modification" }
+    { id: "team:write", label: "Ajout / modification" },
+    { id: "team:delete", label: "Suppression" }
   ]
 };
 
@@ -623,9 +631,14 @@ function normalizeDailyTaskTemplates(templates = []) {
   return templates.map((template) => ({
     id: template.id || createId(),
     title: template.title || "Tâche de base",
+    active: template.active === true,
     crops: Array.isArray(template.crops) ? template.crops : [],
     modes: Array.isArray(template.modes) ? template.modes : [],
-    note: template.note || ""
+    note: template.note || "",
+    updatedAt: template.updatedAt,
+    updatedBy: template.updatedBy,
+    deletedAt: template.deletedAt,
+    deletedBy: template.deletedBy
   }));
 }
 
@@ -687,6 +700,7 @@ const remoteColumnMap = {
   },
   dailyTaskTemplates: {
     title: "title",
+    active: "active",
     crops: "crops",
     modes: "modes",
     note: "note"
@@ -754,6 +768,7 @@ const remoteNumericFields = new Set([
 ]);
 const remoteDateFields = new Set(["date", "due"]);
 const remoteJsonFields = new Set(["pages", "sections", "crops", "modes"]);
+const remoteBooleanFields = new Set(["active"]);
 
 function remoteRowToRecord(collection, row) {
   if (row.data && typeof row.data === "object") {
@@ -776,6 +791,7 @@ function remoteRowToRecord(collection, row) {
 
 function normalizeRemoteValue(collection, appKey, value) {
   if (collection === "finance" && appKey === "isSale") return Boolean(value);
+  if (remoteBooleanFields.has(appKey)) return Boolean(value);
   if (value === undefined || value === "") return null;
   if (remoteNumericFields.has(appKey)) return Number(value);
   if (remoteDateFields.has(appKey)) return value || null;
@@ -1192,8 +1208,7 @@ function bindEvents() {
   document.body.addEventListener("change", (event) => {
     const baseTaskCheckbox = event.target.closest("[data-base-task-check]");
     if (!baseTaskCheckbox) return;
-    if (baseTaskCheckbox.checked) createCompletedBaseTask(baseTaskCheckbox.dataset.baseTaskCheck);
-    else renderDailyTaskBase();
+    toggleBaseTaskActive(baseTaskCheckbox.dataset.baseTaskCheck, baseTaskCheckbox.checked);
   });
   const handlePeriodInput = (event) => {
     const periodInput = event.target.closest("[data-period-key]");
@@ -1205,7 +1220,8 @@ function bindEvents() {
 
   document.querySelector("#loginForm").addEventListener("submit", handleLogin);
   window.agriPilotLoginReady = true;
-  document.querySelector("#quickTaskBtn").addEventListener("click", () => openModal("task"));
+  const quickTaskButton = document.querySelector("#quickTaskBtn");
+  if (quickTaskButton) quickTaskButton.addEventListener("click", () => openModal("task"));
   document.querySelector("#logoutBtn").addEventListener("click", logout);
   document.querySelector("#recordForm").addEventListener("submit", handleFormSubmit);
   document.querySelector("#changePasswordBtn").addEventListener("click", openPasswordModal);
@@ -1762,6 +1778,7 @@ function renderCrops() {
 
 function renderTasks() {
   refreshTaskStatuses();
+  ensureActiveBaseTasksForToday();
   renderDailyTaskBase();
   const filters = ["Tous", "À faire", "En cours", "En retard", "Terminé"];
   document.querySelector("#taskFilters").innerHTML = filters.map((filter) => `
@@ -1801,10 +1818,11 @@ function renderDailyTaskBase() {
   const templates = state.dailyTaskTemplates || [];
   container.innerHTML = templates.map((template) => `
     <label class="daily-task-check">
-      <input type="checkbox" data-base-task-check="${template.id}" aria-label="${escapeHtml(template.title)}" ${baseTaskDoneToday(template) ? "checked" : ""} />
+      <input type="checkbox" data-base-task-check="${template.id}" aria-label="${escapeHtml(template.title)}" ${template.active === true ? "checked" : ""} />
       <span class="daily-task-body">
         <strong>${template.title}</strong>
         <span class="muted">${template.crops.length ? template.crops.join(" · ") : "Toutes les cultures"}${template.modes && template.modes.length ? ` · ${template.modes.join(" · ")}` : " · Tous modes"}</span>
+        <small>${template.active === true ? "Active : une tâche À faire est générée chaque jour." : "Inactive : aucune génération automatique."}</small>
         ${template.note ? `<small>${template.note}</small>` : ""}
       </span>
       <span class="daily-task-actions">
@@ -1815,28 +1833,46 @@ function renderDailyTaskBase() {
   `).join("") || `<p class="muted">Aucune tâche de base enregistrée.</p>`;
 }
 
-function baseTaskDoneToday(template) {
+function baseTaskGeneratedToday(template) {
   const today = currentDateValue();
   return state.tasks.some((task) => task.due === today && (task.baseTaskId === template.id || task.title === template.title));
 }
 
-function createCompletedBaseTask(templateId) {
-  const template = (state.dailyTaskTemplates || []).find((item) => item.id === templateId);
-  if (!template) return;
-  if (baseTaskDoneToday(template)) {
+function ensureActiveBaseTasksForToday() {
+  const templates = state.dailyTaskTemplates || [];
+  let created = false;
+  templates.filter((template) => template.active === true).forEach((template) => {
+    if (baseTaskGeneratedToday(template)) return;
+    state.tasks.unshift(touchRecord({
+      id: createId(),
+      baseTaskId: template.id,
+      title: template.title,
+      field: template.crops && template.crops.length ? template.crops.join(", ") : "Toutes les cultures",
+      owner: currentUserLabel(),
+      due: currentDateValue(),
+      status: "À faire"
+    }));
+    created = true;
+  });
+  if (created) {
+    activeTaskFilter = "Tous";
+    saveState();
+  }
+}
+
+function toggleBaseTaskActive(templateId, active) {
+  if (!canAccessSection("tasks:write")) return;
+  let changed = false;
+  state.dailyTaskTemplates = (state.dailyTaskTemplates || []).map((template) => {
+    if (template.id !== templateId) return template;
+    changed = template.active !== active;
+    return touchRecord({ ...template, active });
+  });
+  if (!changed) {
     renderDailyTaskBase();
     return;
   }
-  state.tasks.unshift(touchRecord({
-    id: createId(),
-    baseTaskId: template.id,
-    title: template.title,
-    field: template.crops && template.crops.length ? template.crops.join(", ") : "Toutes les cultures",
-    owner: currentUserLabel(),
-    due: currentDateValue(),
-    status: "Terminé"
-  }));
-  activeTaskFilter = "Tous";
+  if (active) ensureActiveBaseTasksForToday();
   saveState();
   render();
 }
@@ -2289,10 +2325,21 @@ function allSectionsForPages(pages) {
   return pages.flatMap((page) => (accessSections[page] || []).map((section) => section.id));
 }
 
+function expandLegacySections(sections = []) {
+  const expanded = new Set(sections);
+  sections.forEach((section) => {
+    if (!section.endsWith(":form")) return;
+    const prefix = section.replace(":form", "");
+    expanded.add(`${prefix}:write`);
+    expanded.add(`${prefix}:delete`);
+  });
+  return Array.from(expanded).filter((section) => !section.endsWith(":form"));
+}
+
 function profileSections(profile) {
   const pages = profilePages(profile);
   if (profile.role === "Admin") return allSectionsForPages(pages);
-  if (Array.isArray(profile.sections)) return profile.sections;
+  if (Array.isArray(profile.sections)) return expandLegacySections(profile.sections);
   const sections = allSectionsForPages(pages);
   return profilePages(profile).includes("finance") ? sections : sections.filter((section) => section !== "dashboard:revenues");
 }
@@ -2329,6 +2376,43 @@ function canManageTeam() {
   return currentProfile().role === "Admin";
 }
 
+const modalWriteSections = {
+  field: "fields:write",
+  crop: "crops:write",
+  task: "tasks:write",
+  baseTask: "tasks:write",
+  harvest: "harvests:write",
+  stock: "stock:write",
+  finance: "finance:write",
+  sale: "prices:write",
+  team: "team:write",
+  profile: "profiles:write"
+};
+
+const collectionDeleteSections = {
+  fields: "fields:delete",
+  crops: "crops:delete",
+  tasks: "tasks:delete",
+  dailyTaskTemplates: "tasks:delete",
+  harvests: "harvests:delete",
+  stock: "stock:delete",
+  finance: "finance:delete",
+  team: "team:delete",
+  profiles: "profiles:delete"
+};
+
+function canWriteModal(type) {
+  if (type === "profile") return canManageProfiles();
+  if (type === "team") return canManageTeam();
+  return canAccessSection(modalWriteSections[type]);
+}
+
+function canDeleteCollection(collection) {
+  if (collection === "profiles") return canManageProfiles();
+  if (collection === "team") return canManageTeam();
+  return canAccessSection(collectionDeleteSections[collection]);
+}
+
 function canAccessView(view) {
   const profile = currentProfile();
   if (view === "profiles") return canManageProfiles();
@@ -2357,55 +2441,56 @@ function applySectionAccess() {
     ["#revenueCard", "dashboard:revenues"],
     ["#revenueDetailsBtn", "dashboard:revenues"],
     ["#fieldsGrid", "fields:list"],
-    ['[data-modal="field"]', "fields:form"],
+    ['[data-modal="field"]', "fields:write"],
     ["#cropsGrid", "crops:list"],
-    ['[data-modal="crop"]', "crops:form"],
+    ['[data-modal="crop"]', "crops:write"],
     ["#tasksView .daily-task-panel", "tasks:base"],
     ["#dailyTaskBase", "tasks:base"],
-    ['[data-modal="baseTask"]', "tasks:form"],
+    ['[data-modal="baseTask"]', "tasks:write"],
     ["#taskPeriodFilters", "tasks:filters"],
     ["#taskFilters", "tasks:filters"],
     ["#tasksTable", "tasks:list"],
-    ['[data-modal="task"]', "tasks:form"],
-    ["#quickTaskBtn", "tasks:form"],
+    ["#quickTaskBtn", "tasks:write"],
+    ['[data-modal="task"]', "tasks:write"],
     ["#harvestSummary", "harvests:summary"],
     ["#harvestPeriodFilters", "harvests:table"],
     ["#harvestsTable", "harvests:table"],
-    ['[data-modal="harvest"]', "harvests:form"],
+    ['[data-modal="harvest"]', "harvests:write"],
     ["#stockGrid", "stock:list"],
-    ['[data-modal="stock"]', "stock:form"],
+    ['[data-modal="stock"]', "stock:write"],
     ["#financeSummary", "finance:summary"],
     ["#financePeriodFilters", "finance:operations"],
     ["#financeTable", "finance:operations"],
     ["#financeByCropTable", "finance:byCrop"],
-    ['#financeView [data-modal="finance"]', "finance:form"],
+    ['#financeView [data-modal="finance"]', "finance:write"],
     ["#priceFilters", "prices:filters"],
     ["#pricePeriodFilters", "prices:filters"],
     ["#priceSummary", "prices:filters"],
     ["#priceChart", "prices:chart"],
     ["#priceSalesTable", "prices:sales"],
-    ['#pricesView [data-modal="sale"]', "prices:form"],
-    ['[data-edit][data-type="field"]', "fields:form"],
-    ['[data-toggle-field]', "fields:form"],
-    ['[data-delete][data-collection="fields"]', "fields:form"],
-    ['[data-edit][data-type="crop"]', "crops:form"],
-    ['[data-toggle-crop]', "crops:form"],
-    ['[data-delete][data-collection="crops"]', "crops:form"],
-    ['[data-edit][data-type="task"]', "tasks:form"],
-    ['[data-edit][data-type="baseTask"]', "tasks:form"],
-    ['[data-delete][data-collection="tasks"]', "tasks:form"],
-    ['[data-delete][data-collection="dailyTaskTemplates"]', "tasks:form"],
-    ['[data-complete]', "tasks:form"],
-    ['[data-edit][data-type="harvest"]', "harvests:form"],
-    ['[data-delete][data-collection="harvests"]', "harvests:form"],
-    ['[data-edit][data-type="stock"]', "stock:form"],
-    ['[data-delete][data-collection="stock"]', "stock:form"],
-    ['[data-edit][data-type="finance"]', "finance:form"],
-    ['[data-delete][data-collection="finance"]', "finance:form"],
-    ['[data-edit][data-type="team"]', "team:form"],
-    ['[data-delete][data-collection="team"]', "team:form"],
+    ['#pricesView [data-modal="sale"]', "prices:write"],
+    ['[data-edit][data-type="field"]', "fields:write"],
+    ['[data-toggle-field]', "fields:write"],
+    ['[data-delete][data-collection="fields"]', "fields:delete"],
+    ['[data-edit][data-type="crop"]', "crops:write"],
+    ['[data-toggle-crop]', "crops:write"],
+    ['[data-delete][data-collection="crops"]', "crops:delete"],
+    ['[data-edit][data-type="task"]', "tasks:write"],
+    ['[data-edit][data-type="baseTask"]', "tasks:write"],
+    ['[data-base-task-check]', "tasks:write"],
+    ['[data-delete][data-collection="tasks"]', "tasks:delete"],
+    ['[data-delete][data-collection="dailyTaskTemplates"]', "tasks:delete"],
+    ['[data-complete]', "tasks:write"],
+    ['[data-edit][data-type="harvest"]', "harvests:write"],
+    ['[data-delete][data-collection="harvests"]', "harvests:delete"],
+    ['[data-edit][data-type="stock"]', "stock:write"],
+    ['[data-delete][data-collection="stock"]', "stock:delete"],
+    ['[data-edit][data-type="finance"]', "finance:write"],
+    ['[data-delete][data-collection="finance"]', "finance:delete"],
+    ['[data-edit][data-type="team"]', "team:write"],
+    ['[data-delete][data-collection="team"]', "team:delete"],
     ["#teamGrid", "team:list"],
-    ['[data-modal="team"]', "team:form"]
+    ['[data-modal="team"]', "team:write"]
   ];
   rules.forEach(([selector, sectionId]) => {
     document.querySelectorAll(selector).forEach((node) => {
@@ -2439,6 +2524,8 @@ function accessDescription(role) {
 function openModal(type, id = null) {
   const saleShortcut = type === "sale";
   modalType = saleShortcut ? "finance" : type;
+  modalAccessType = type;
+  if (!canWriteModal(type)) return;
   if (modalType === "team" && !canManageTeam()) return;
   const config = modalConfig[modalType];
   const record = id ? state[config.collection].find((item) => item.id === id) : null;
@@ -2520,9 +2607,10 @@ function openModal(type, id = null) {
 
 function renderSectionAccessChoices(pages, selectedSections, label = "Sous-sections autorisées") {
   const visiblePages = pages.length ? pages : ["dashboard"];
+  const selected = expandLegacySections(selectedSections);
   return `<fieldset class="checkbox-group section-access-group"><legend>${label}</legend>${visiblePages.map((page) => {
     const sections = accessSections[page] || [];
-    return `<div class="section-access-page"><strong>${pageLabel(page)}</strong>${sections.map((section) => `<label><input type="checkbox" name="sections" value="${section.id}" ${selectedSections.includes(section.id) ? "checked" : ""} />${section.label}</label>`).join("")}</div>`;
+    return `<div class="section-access-page"><strong>${pageLabel(page)}</strong>${sections.map((section) => `<label><input type="checkbox" name="sections" value="${section.id}" ${selected.includes(section.id) ? "checked" : ""} />${section.label}</label>`).join("")}</div>`;
   }).join("")}</fieldset>`;
 }
 
@@ -2613,6 +2701,7 @@ function escapeHtml(value) {
 function handleFormSubmit(event) {
   event.preventDefault();
   const config = modalConfig[modalType];
+  if (!canWriteModal(modalAccessType || modalType)) return;
   if (modalType === "team" && !canManageTeam()) return;
   const data = Object.fromEntries(new FormData(event.currentTarget).entries());
   config.fields.forEach(([name, , typeName]) => {
@@ -2749,6 +2838,7 @@ function showPasswordMessage(text, type) {
 }
 
 function deleteRecord(collection, id) {
+  if (!canDeleteCollection(collection)) return;
   if (collection === "team" && !canManageTeam()) return;
   state[collection] = state[collection].filter((item) => item.id !== id);
   rememberDeletion(collection, id);
@@ -2762,12 +2852,14 @@ function deleteRecord(collection, id) {
 }
 
 function completeTask(id) {
+  if (!canAccessSection("tasks:write")) return;
   state.tasks = state.tasks.map((task) => task.id === id ? touchRecord({ ...task, status: "Terminé" }) : task);
   saveState();
   render();
 }
 
 function toggleField(id) {
+  if (!canAccessSection("fields:write")) return;
   state.fields = state.fields.map((field) =>
     field.id === id ? touchRecord({ ...field, active: field.active === false }) : field
   );
@@ -2776,6 +2868,7 @@ function toggleField(id) {
 }
 
 function toggleCrop(id) {
+  if (!canAccessSection("crops:write")) return;
   state.crops = state.crops.map((crop) =>
     crop.id === id ? touchRecord({ ...crop, active: crop.active === false }) : crop
   );
