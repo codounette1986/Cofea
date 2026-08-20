@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=92" />
+    <link rel="manifest" href="./manifest.webmanifest?v=95" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=92" />
+    <link rel="stylesheet" href="./styles.css?v=95" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -73,13 +73,9 @@
           <section class="panel dashboard-weather-top">
             <div class="panel-head">
               <h2>Météo agricole</h2>
-              <span class="pill">Dakar</span>
+              <span class="pill" id="weatherLocationLabel">Localisation</span>
             </div>
-            <div class="weather-card">
-              <strong>31°C</strong>
-              <span>Vent NE 14 km/h</span>
-              <p>Arrosage conseillé tôt le matin. Risque de chaleur sur les jeunes plants.</p>
-            </div>
+            <div class="weather-card" id="weatherCard"></div>
           </section>
           <div class="kpi-grid" id="kpiGrid"></div>
           <div class="dashboard-grid">
@@ -340,7 +336,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v92";
+        var refreshKey = "agripilot-cache-refresh-v95";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -359,7 +355,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=92");
+          window.location.replace("./start.html?v=95");
         });
       })();
     </script>
@@ -384,6 +380,6 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=92" defer></script>
+    <script src="./app.js?v=95" defer></script>
   </body>
 </html>

@@ -275,6 +275,14 @@ h2 { font-size: 1.05rem; margin-bottom: 0; }
 .weather-card { margin-top: 16px; padding: 18px; border-radius: 8px; background: #eef6f4; border: 1px solid #d6e8e3; }
 .weather-card strong { display: block; font-size: 2.5rem; }
 .weather-card p { margin: 12px 0 0; color: var(--muted); }
+.weather-current { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.weather-week { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); gap: 10px; margin-top: 16px; overflow-x: auto; padding-bottom: 4px; }
+.weather-day { min-width: 120px; padding: 12px; border-radius: 8px; background: #ffffff; border: 1px solid #d6e8e3; }
+.weather-day strong { font-size: 0.95rem; }
+.weather-day span { display: block; margin-top: 4px; color: var(--field); font-weight: 700; }
+.weather-day div { margin-top: 8px; font-weight: 800; }
+.weather-day small { display: block; margin-top: 6px; color: var(--muted); line-height: 1.35; }
+.weather-day p { margin-top: 8px; font-size: 0.82rem; line-height: 1.35; }
 
 .field-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .mini-field { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: #fbfcf8; }
@@ -475,6 +483,8 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
   .panel-head { align-items: flex-start; flex-direction: column; gap: 8px; }
   .weather-card { margin-top: 12px; padding: 14px; }
   .weather-card strong { font-size: 2rem; }
+  .weather-current { flex-direction: column; }
+  .weather-week { grid-template-columns: repeat(7, minmax(132px, 1fr)); margin-right: -14px; padding-right: 14px; }
   .task-item, .stock-alert { grid-template-columns: 1fr; }
   .summary-line, .culture-row { align-items: flex-start; flex-direction: column; }
   .filter-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

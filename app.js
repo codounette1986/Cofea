@@ -2,7 +2,10 @@
 const activeProfileKey = "agripilot-active-profile-v1";
 const authUserKey = "agripilot-auth-user-v1";
 const lastRemoteSyncKey = "agripilot-last-remote-sync-v1";
+const weatherCacheKey = "agripilot-weather-forecast-v1";
+const weatherLocationCacheKey = "agripilot-weather-location-v1";
 const deletionRetentionDays = 30;
+const weatherTimezone = "Africa/Dakar";
 
 const supabaseConfig = {
   url: "https://zulvxofvazgsllibodfp.supabase.co",
@@ -111,6 +114,9 @@ let activeUserId = sessionStorage.getItem(authUserKey) || "";
 let syncTimer = null;
 let autoSyncTimer = null;
 let syncInProgress = false;
+let weatherForecast = loadCachedWeather();
+let weatherLocation = loadCachedWeatherLocation();
+let weatherInProgress = false;
 let syncState = {
   status: "idle",
   detail: localStorage.getItem(lastRemoteSyncKey) ? `Dernière synchro : ${localStorage.getItem(lastRemoteSyncKey)}` : "Supabase prêt"
@@ -1117,6 +1123,25 @@ function init() {
   }
 }
 
+function loadCachedWeather() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(weatherCacheKey) || "null");
+    return cached && Array.isArray(cached.days) ? cached : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function loadCachedWeatherLocation() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(weatherLocationCacheKey) || "null");
+    if (cached && Number.isFinite(cached.latitude) && Number.isFinite(cached.longitude)) return cached;
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
 function renderNav() {
   const nav = document.querySelector("#navList");
   nav.innerHTML = navItems.filter(([id]) => canAccessView(id)).map(([id, label, icon]) => `
@@ -1209,6 +1234,7 @@ function bindEvents() {
   if (mobileSyncNowButton) mobileSyncNowButton.addEventListener("click", syncFromSupabase);
   window.addEventListener("online", () => {
     renderConnection();
+    loadWeatherForecast({ force: true });
     syncFromSupabase();
   });
   window.addEventListener("offline", renderConnection);
@@ -1275,6 +1301,7 @@ function showApp() {
   try {
     ensureAllowedView();
     render();
+    loadWeatherForecast();
     startAutoSync();
     syncFromSupabase();
   } catch (error) {
@@ -1425,6 +1452,174 @@ function renderConnection() {
   });
 }
 
+function renderWeather() {
+  const weatherCard = document.querySelector("#weatherCard");
+  const locationLabel = document.querySelector("#weatherLocationLabel");
+  if (locationLabel) locationLabel.textContent = weatherForecast?.location || weatherLocation?.label || "Localisation requise";
+  if (!weatherCard) return;
+  if (!weatherForecast) {
+    weatherCard.innerHTML = `
+      <strong>Localisation requise</strong>
+      <span>Autorisez la position pour afficher les prévisions de la semaine.</span>
+    `;
+    return;
+  }
+  const updatedAt = weatherForecast.updatedAt ? new Date(weatherForecast.updatedAt) : null;
+  const current = weatherForecast.current || {};
+  const days = weatherForecast.days || [];
+  const currentTemp = Number.isFinite(current.temperature) ? `${Math.round(current.temperature)}°C` : "7 jours";
+  const currentLine = [
+    weatherLabel(current.weatherCode),
+    Number.isFinite(current.windSpeed) ? `Vent ${Math.round(current.windSpeed)} km/h` : "",
+    Number.isFinite(current.humidity) ? `Humidité ${Math.round(current.humidity)}%` : ""
+  ].filter(Boolean).join(" · ");
+  weatherCard.innerHTML = `
+    <div class="weather-current">
+      <div>
+        <strong>${currentTemp}</strong>
+        <span>${currentLine || "Prévision agricole sur 7 jours"}</span>
+      </div>
+      <span class="pill">${updatedAt ? `MAJ ${updatedAt.toLocaleTimeString("fr-SN", { hour: "2-digit", minute: "2-digit" })}` : "Prévision"}</span>
+    </div>
+    <div class="weather-week">
+      ${days.map((day) => `
+        <article class="weather-day">
+          <strong>${formatWeatherDay(day.date)}</strong>
+          <span>${weatherLabel(day.weatherCode)}</span>
+          <div>${Math.round(day.min)}° / ${Math.round(day.max)}°C</div>
+          <small>Pluie ${formatWeatherNumber(day.precipitation)} mm · Vent ${Math.round(day.wind)} km/h</small>
+          <p>${irrigationAdvice(day)}</p>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function loadWeatherForecast(options = {}) {
+  if (weatherInProgress || !navigator.onLine) {
+    renderWeather();
+    return;
+  }
+  weatherInProgress = true;
+  try {
+    weatherLocation = await resolveWeatherLocation();
+    if (!weatherLocation) {
+      weatherForecast = null;
+      localStorage.removeItem(weatherCacheKey);
+      return;
+    }
+    const cachedAge = weatherForecast && weatherForecast.updatedAt ? Date.now() - new Date(weatherForecast.updatedAt).getTime() : Infinity;
+    const cacheMatchesLocation = weatherForecast && locationsClose(weatherForecast, weatherLocation);
+    if (!options.force && cacheMatchesLocation && cachedAge < 2 * 60 * 60 * 1000) {
+      renderWeather();
+      return;
+    }
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.search = new URLSearchParams({
+      latitude: String(weatherLocation.latitude),
+      longitude: String(weatherLocation.longitude),
+      timezone: weatherLocation.timezone,
+      forecast_days: "7",
+      current: "temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m",
+      daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,et0_fao_evapotranspiration"
+    }).toString();
+    const response = await fetch(url.toString());
+    if (!response.ok) throw new Error(`Météo impossible (${response.status})`);
+    weatherForecast = normalizeWeatherForecast(await response.json());
+    localStorage.setItem(weatherCacheKey, JSON.stringify(weatherForecast));
+  } catch (error) {
+    weatherForecast = weatherLocation ? loadCachedWeather() : null;
+  } finally {
+    weatherInProgress = false;
+    renderWeather();
+  }
+}
+
+function locationsClose(forecast, location) {
+  if (!forecast || !location) return false;
+  return Math.abs(Number(forecast.latitude) - Number(location.latitude)) < 0.05
+    && Math.abs(Number(forecast.longitude) - Number(location.longitude)) < 0.05;
+}
+
+function resolveWeatherLocation() {
+  if (!("geolocation" in navigator)) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location = {
+          label: "Position actuelle",
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          timezone: weatherTimezone
+        };
+        localStorage.setItem(weatherLocationCacheKey, JSON.stringify(location));
+        resolve(location);
+      },
+      () => {
+        weatherLocation = null;
+        weatherForecast = null;
+        localStorage.removeItem(weatherLocationCacheKey);
+        localStorage.removeItem(weatherCacheKey);
+        resolve(null);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 6 * 60 * 60 * 1000 }
+    );
+  });
+}
+
+function normalizeWeatherForecast(data) {
+  const daily = data.daily || {};
+  const current = data.current || {};
+  const times = daily.time || [];
+  return {
+    updatedAt: new Date().toISOString(),
+    location: weatherLocation.label,
+    latitude: weatherLocation.latitude,
+    longitude: weatherLocation.longitude,
+    current: {
+      temperature: Number(current.temperature_2m),
+      humidity: Number(current.relative_humidity_2m),
+      precipitation: Number(current.precipitation),
+      weatherCode: Number(current.weather_code),
+      windSpeed: Number(current.wind_speed_10m)
+    },
+    days: times.map((date, index) => ({
+      date,
+      weatherCode: Number(daily.weather_code?.[index]),
+      max: Number(daily.temperature_2m_max?.[index]),
+      min: Number(daily.temperature_2m_min?.[index]),
+      precipitation: Number(daily.precipitation_sum?.[index] || 0),
+      wind: Number(daily.wind_speed_10m_max?.[index] || 0),
+      evapotranspiration: Number(daily.et0_fao_evapotranspiration?.[index] || 0)
+    }))
+  };
+}
+
+function weatherLabel(code) {
+  if ([0, 1].includes(code)) return "Ensoleillé";
+  if ([2, 3].includes(code)) return "Nuageux";
+  if ([45, 48].includes(code)) return "Brume";
+  if ([51, 53, 55, 56, 57].includes(code)) return "Bruine";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "Pluie";
+  if ([95, 96, 99].includes(code)) return "Orage";
+  return "Variable";
+}
+
+function irrigationAdvice(day) {
+  if (day.precipitation >= 10) return "Limiter l'arrosage et vérifier le drainage.";
+  if (day.precipitation >= 3) return "Réduire l'arrosage selon l'humidité du sol.";
+  if (day.max >= 34 || day.evapotranspiration >= 5) return "Arroser tôt le matin, surveiller les jeunes plants.";
+  return "Arrosage normal, contrôler l'humidité au pied.";
+}
+
+function formatWeatherDay(dateValue) {
+  return new Date(`${dateValue}T00:00:00`).toLocaleDateString("fr-SN", { weekday: "short", day: "2-digit" });
+}
+
+function formatWeatherNumber(value) {
+  return Number(value || 0).toLocaleString("fr-SN", { maximumFractionDigits: 1 });
+}
+
 function renderDashboard() {
   const expenses = state.finance.filter((item) => item.type === "Dépense").reduce((sum, item) => sum + Number(item.amount), 0);
   const revenues = state.finance.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
@@ -1441,6 +1636,7 @@ function renderDashboard() {
   document.querySelector("#kpiGrid").innerHTML = kpis.map(([label, value]) => `
     <article class="kpi"><span>${label}</span><strong>${value}</strong></article>
   `).join("");
+  renderWeather();
   document.querySelector("#priorityTasks").innerHTML = state.tasks.slice(0, 4).map(taskItem).join("");
   document.querySelector("#fieldStrip").innerHTML = activeFields.slice(0, 3).map(fieldMini).join("");
   document.querySelector("#stockAlerts").innerHTML = lowStock().map((stock) => `
