@@ -333,7 +333,9 @@ th { color: var(--muted); font-size: 0.82rem; text-transform: uppercase; letter-
 .sort-header span { color: var(--field); min-width: 10px; }
 td .text-button + .text-button { margin-left: 6px; }
 
-.finance-layout, .harvest-layout, .price-layout { display: grid; grid-template-columns: 320px 1fr; gap: 18px; }
+.finance-layout, .harvest-layout, .price-layout { display: grid; gap: 18px; }
+.finance-layout { grid-template-columns: 1fr; }
+.harvest-layout, .price-layout { grid-template-columns: 320px 1fr; }
 .finance-summary, .harvest-summary, .price-summary { display: grid; gap: 12px; margin-top: 14px; }
 .finance-by-crop { margin-top: 18px; }
 .summary-line { display: flex; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 8px; background: #f5f7f1; }
@@ -436,7 +438,8 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
   .sidebar { position: static; height: auto; padding: 16px; }
   .nav-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sync-card { display: none; }
-  .kpi-grid, .dashboard-grid, .record-grid, .finance-layout, .harvest-layout, .price-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-grid, .dashboard-grid, .record-grid, .harvest-layout, .price-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .finance-layout { grid-template-columns: 1fr; }
   .span-2 { grid-column: span 2; }
 }
 

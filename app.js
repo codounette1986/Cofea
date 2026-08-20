@@ -2038,7 +2038,7 @@ function renderFinance() {
     ["Dépenses", money(expense)],
     ["Solde", money(revenue - expense)]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
-  setupTableSort("finance", "#financeView .finance-layout thead", ["date", "label", "crop", "type", "amount", null], renderFinance);
+  setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "type", "amount", null], renderFinance);
   document.querySelector("#financeTable").innerHTML = sortedFinanceRecords.map((item) => `
     <tr>
       <td>${item.date}</td>
