@@ -1,0 +1,11 @@
+{
+  "name": "commcare-mining-hse-pwa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline-first CommCare-inspired Mining HSE PWA demo.",
+  "scripts": {
+    "dev": "python -m http.server 4173",
+    "build": "python tools/validate_static_app.py",
+    "start": "python -m http.server 4173"
+  }
+}
