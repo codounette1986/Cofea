@@ -712,6 +712,7 @@ const remoteColumnMap = {
   },
   tasks: {
     title: "title",
+    baseTaskId: "base_task_id",
     field: "field",
     owner: "owner",
     due: "due",
@@ -1793,6 +1794,7 @@ function renderCrops() {
 function renderTasks() {
   refreshTaskStatuses();
   ensureActiveBaseTasksForToday();
+  repairTaskInstructionsFromTemplates();
   renderDailyTaskBase();
   const filters = ["Tous", "À faire", "En cours", "En retard", "Terminé"];
   document.querySelector("#taskFilters").innerHTML = filters.map((filter) => `
@@ -1854,8 +1856,31 @@ function baseTaskGeneratedToday(template) {
 
 function taskInstruction(task) {
   if (task.note) return task.note;
-  const template = (state.dailyTaskTemplates || []).find((item) => item.id === task.baseTaskId || item.title === task.title);
+  const template = matchingBaseTaskTemplate(task);
   return template ? template.note || "" : "";
+}
+
+function matchingBaseTaskTemplate(task) {
+  const taskTitle = String(task.title || "").trim().toLowerCase();
+  return (state.dailyTaskTemplates || []).find((item) =>
+    item.id === task.baseTaskId || String(item.title || "").trim().toLowerCase() === taskTitle
+  );
+}
+
+function repairTaskInstructionsFromTemplates() {
+  let changed = false;
+  state.tasks = state.tasks.map((task) => {
+    if (task.note && task.baseTaskId) return task;
+    const template = matchingBaseTaskTemplate(task);
+    if (!template || !template.note) return task;
+    changed = true;
+    return touchRecord({
+      ...task,
+      baseTaskId: task.baseTaskId || template.id,
+      note: task.note || template.note
+    });
+  });
+  if (changed) saveState();
 }
 
 function ensureActiveBaseTasksForToday() {

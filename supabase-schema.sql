@@ -35,6 +35,7 @@ create table if not exists public.fields (
 create table if not exists public.tasks (
   id text primary key,
   title text,
+  base_task_id text,
   field text,
   owner text,
   due date,
@@ -184,6 +185,7 @@ alter table public.fields add column if not exists mode text;
 alter table public.fields add column if not exists field_update text;
 
 alter table public.tasks add column if not exists title text;
+alter table public.tasks add column if not exists base_task_id text;
 alter table public.tasks add column if not exists field text;
 alter table public.tasks add column if not exists owner text;
 alter table public.tasks add column if not exists due date;
