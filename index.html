@@ -1,288 +1,385 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0b3b4a" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#285238" />
     <meta
       name="description"
-      content="CommCare Mining HSE is an offline-first frontline health, safety, and environment PWA for mining operations."
+      content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="icon" href="assets/icon-192.png" />
-    <link rel="apple-touch-icon" href="assets/icon-192.png" />
-    <link rel="stylesheet" href="styles.css" />
-    <title>CommCare Mining HSE</title>
+    <link rel="manifest" href="./manifest.webmanifest?v=109" />
+    <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css?v=109" />
+    <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar" aria-label="Primary">
-        <div class="brand-block">
-          <div class="brand-mark" aria-hidden="true">H</div>
+    <div class="startup-banner" id="startupBanner">
+      Chargement de l'application...
+    </div>
+        <section class="login-screen" id="loginScreen" aria-labelledby="loginTitle">
+      <form class="login-card" id="loginForm" action="./index.html" method="post" onsubmit="return false">
+        <div class="brand">
+          <img class="brand-logo" src="./icons/logo.svg" alt="" aria-hidden="true" />
           <div>
-            <p class="brand-name">CommCare</p>
-            <p class="brand-subtitle">Mining HSE</p>
+            <strong>AgriPilot</strong>
+            <span>Exploitation agricole</span>
           </div>
         </div>
-
-        <nav class="nav-list" aria-label="Modules">
-          <button class="nav-item active" data-view="dashboard" type="button">
-            <span class="nav-icon">H</span>
-            <span>Dashboard</span>
-          </button>
-          <button class="nav-item" data-view="observations" type="button">
-            <span class="nav-icon">!</span>
-            <span>Observations</span>
-          </button>
-          <button class="nav-item" data-view="incidents" type="button">
-            <span class="nav-icon">+</span>
-            <span>Incidents</span>
-          </button>
-          <button class="nav-item" data-view="inspections" type="button">
-            <span class="nav-icon">C</span>
-            <span>Inspections</span>
-          </button>
-          <button class="nav-item" data-view="actions" type="button">
-            <span class="nav-icon">&gt;</span>
-            <span>Actions</span>
-          </button>
-          <button class="nav-item" data-view="training" type="button">
-            <span class="nav-icon">T</span>
-            <span>Training</span>
-          </button>
-        </nav>
-
-        <div class="sync-panel">
-          <div class="sync-status" id="connectionStatus">
-            <span class="status-dot"></span>
-            <span>Checking sync</span>
+        <div>
+          <h1 id="loginTitle">Connexion</h1>
+          <p>Accédez à votre espace selon votre profil.</p>
+        </div>
+        <label>Identifiant<input name="login" type="text" required autocomplete="username" /></label>
+        <label>Mot de passe<input name="password" type="password" required autocomplete="current-password" /></label>
+        <p class="password-message" id="loginMessage"></p>
+        <button class="primary-button" type="submit">Se connecter</button>
+      </form>
+    </section>
+<div class="app-shell">
+      <aside class="sidebar" aria-label="Navigation principale">
+        <div class="brand">
+          <img class="brand-logo" src="./icons/logo.svg" alt="" aria-hidden="true" />
+          <div>
+            <strong>AgriPilot</strong>
+            <span>Exploitation agricole</span>
           </div>
-          <button class="secondary-button full-width" id="syncButton" type="button">Sync queue</button>
+        </div>
+        <nav class="nav-list" id="navList"></nav>
+        <div class="sync-card">
+          <span class="status-dot" id="statusDot"></span>
+          <div>
+            <strong id="statusText">Mode local</strong>
+            <span id="statusDetail">Données sauvegardées sur cet appareil</span>
+          </div>
+          <button class="sync-button" id="syncNowBtn" type="button">Synchroniser</button>
         </div>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Frontline HSE + AI + Integration</p>
-            <h1 id="viewTitle">Dashboard</h1>
+            <h1 id="pageTitle">Tableau de bord</h1>
           </div>
-          <div class="topbar-actions">
-            <a class="secondary-link manager-link" href="field.html">Field app</a>
-            <label class="role-picker">
-              <span>Role</span>
-              <select id="roleSelect">
-                <option>HSE Manager</option>
-                <option>Supervisor</option>
-                <option>Worker / Field Agent</option>
-                <option>Mine / Country Manager</option>
-              </select>
-            </label>
-            <button class="primary-button" id="quickReportButton" type="button">New report</button>
+          <div class="top-actions">
+            <button class="primary-button" id="quickTaskBtn">Nouvelle tâche</button>
+            <button class="text-button mobile-sync-button" id="mobileSyncNowBtn" type="button">Synchroniser</button>
+            <button class="text-button" id="changePasswordBtn">Changer mot de passe</button>
+            <button class="text-button" id="logoutBtn">Déconnexion</button>
           </div>
         </header>
 
-        <section class="hero-strip" aria-label="Current operating picture">
-          <div>
-            <p class="hero-kicker" id="roleKicker">Tarkwa North Pit</p>
-            <h2 id="roleHeadline">Today's HSE operating picture</h2>
-            <p id="roleSummary">
-              Capture field risk, route corrective action, verify closure, and keep leadership
-              aligned from a single offline-ready workspace.
-            </p>
-          </div>
-          <div class="risk-meter" id="roleMeter" aria-label="Risk index 68 out of 100">
-            <span id="roleMeterValue">68</span>
-            <small id="roleMeterLabel">Risk index</small>
-          </div>
-        </section>
-
-        <section class="role-context" aria-label="Role workspace">
-          <div>
-            <span class="context-label">Current workspace</span>
-            <strong id="roleWorkspace">HSE Manager Command Center</strong>
-          </div>
-          <p id="roleFocus">Cross-site KPIs, recurring hazards, incidents, and corrective action closure.</p>
-          <span class="pill" id="uiModeLabel">CommCare-style demo UI</span>
-        </section>
-
-        <section class="content-view active" id="dashboardView" aria-labelledby="dashboardHeading">
-          <div class="section-heading">
-            <div>
-              <h2 id="dashboardHeading">Management Dashboard</h2>
-              <p>Live HSE performance across observations, incidents, inspections, and corrective actions.</p>
+        <section class="view active" id="dashboardView" aria-labelledby="pageTitle">
+          <section class="panel dashboard-weather-top">
+            <div class="panel-head">
+              <h2>Météo agricole</h2>
+              <span class="pill" id="weatherLocationLabel">Localisation</span>
             </div>
-            <div class="filter-row">
-              <select id="siteFilter" aria-label="Filter by site">
-                <option value="all">All sites</option>
-                <option value="Tarkwa North Pit">Tarkwa North Pit</option>
-                <option value="Processing Plant">Processing Plant</option>
-                <option value="Contractor Yard">Contractor Yard</option>
-              </select>
-              <select id="severityFilter" aria-label="Filter by severity">
-                <option value="all">All severities</option>
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </div>
-          </div>
-
+            <div class="weather-card" id="weatherCard"></div>
+          </section>
           <div class="kpi-grid" id="kpiGrid"></div>
-
           <div class="dashboard-grid">
-            <article class="panel wide">
-              <div class="panel-header">
-                <h3>Trends over time</h3>
-                <span>Last 7 days</span>
+            <section class="panel span-2">
+              <div class="panel-head">
+                <h2>Travaux prioritaires</h2>
+                <button class="text-button" data-target="tasks">Tout voir</button>
               </div>
-              <div class="trend-chart" id="trendChart" aria-label="Seven day trend chart"></div>
-            </article>
-
-            <article class="panel">
-              <div class="panel-header">
-                <h3>Risk categories</h3>
-                <span>Top themes</span>
+              <div class="task-list" id="priorityTasks"></div>
+            </section>
+            <section class="panel span-2">
+              <div class="panel-head">
+                <h2>Parcelles</h2>
+                <button class="text-button" data-target="fields">Gérer</button>
               </div>
-              <div class="category-list" id="categoryList"></div>
-            </article>
-
-            <article class="panel">
-              <div class="panel-header">
-                <h3>Overdue actions</h3>
-                <span id="overdueCount">0 open</span>
+              <div class="field-strip" id="fieldStrip"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <h2>Alertes stock</h2>
+                <button class="text-button" data-target="stock">Inventaire</button>
               </div>
-              <div class="record-list compact" id="overdueList"></div>
-            </article>
+              <div class="stock-alerts" id="stockAlerts"></div>
+            </section>
+            <section class="panel span-2">
+              <div class="panel-head">
+                <h2>Récoltes par culture active</h2>
+                <button class="text-button" data-target="harvests">Détails</button>
+              </div>
+              <div class="culture-harvests" id="cultureHarvests"></div>
+            </section>
+            <section class="panel" id="dashboardRevenuePanel">
+              <div class="panel-head">
+                <h2>Revenus</h2>
+                <button class="text-button" data-target="finance" id="revenueDetailsBtn">Détails</button>
+              </div>
+              <div class="revenue-card" id="revenueCard"></div>
+            </section>
           </div>
         </section>
 
-        <section class="content-view" id="observationsView" aria-labelledby="observationsHeading">
-          <div class="section-heading">
-            <div>
-              <h2 id="observationsHeading">Safety Observations</h2>
-              <p>Unsafe conditions, unsafe acts, hazards, and positive safety observations.</p>
-            </div>
-            <button class="primary-button" data-open-form="observation" type="button">New observation</button>
+        <section class="view" id="fieldsView">
+          <div class="section-head">
+            <h2>Parcelles et cultures</h2>
+            <button class="primary-button" data-modal="field">Ajouter une parcelle</button>
           </div>
-          <div class="record-list" id="observationsList"></div>
+          <div class="record-grid" id="fieldsGrid"></div>
         </section>
 
-        <section class="content-view" id="incidentsView" aria-labelledby="incidentsHeading">
-          <div class="section-heading">
-            <div>
-              <h2 id="incidentsHeading">Incident And Near-Miss Management</h2>
-              <p>Report, triage, investigate, assign action, and close cases.</p>
-            </div>
-            <button class="primary-button" data-open-form="incident" type="button">New incident</button>
+        <section class="view" id="cropsView">
+          <div class="section-head">
+            <h2>Base des cultures</h2>
+            <button class="primary-button" data-modal="crop">Ajouter une culture</button>
           </div>
-          <div class="workflow-strip" aria-label="Incident workflow">
-            <span>Report</span><span>Triage</span><span>Investigation</span><span>Corrective Action</span><span>Closure</span>
-          </div>
-          <div class="record-list" id="incidentsList"></div>
+          <div class="record-grid" id="cropsGrid"></div>
         </section>
 
-        <section class="content-view" id="inspectionsView" aria-labelledby="inspectionsHeading">
-          <div class="section-heading">
-            <div>
-              <h2 id="inspectionsHeading">Digital Inspections</h2>
-              <p>Checklist-driven inspection workflows with action creation for failed items.</p>
-            </div>
-            <button class="primary-button" data-open-form="inspection" type="button">Start inspection</button>
+        <section class="view" id="tasksView">
+          <div class="section-head">
+            <h2>Planning des travaux</h2>
           </div>
-          <div class="inspection-board" id="inspectionBoard"></div>
+          <div class="panel daily-task-panel">
+            <div class="panel-head">
+              <h2>Tâches quotidiennes de base</h2>
+              <button class="text-button" data-modal="baseTask" id="addBaseTaskBtn">Ajouter une tâche de base</button>
+            </div>
+            <div class="daily-task-grid" id="dailyTaskBase"></div>
+          </div>
+          <div class="period-filter" id="taskPeriodFilters"><label>Du<input type="date" data-period-key="tasks" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="tasks" data-period-bound="to" /></label><button class="text-button" data-period-reset="tasks">Réinitialiser</button></div>
+          <div class="filter-bar" id="taskFilters"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Travail</th>
+                  <th>Parcelle</th>
+                  <th>Responsable</th>
+                  <th>Échéance</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tasksTable"></tbody>
+            </table>
+          </div>
         </section>
 
-        <section class="content-view" id="actionsView" aria-labelledby="actionsHeading">
-          <div class="section-heading">
-            <div>
-              <h2 id="actionsHeading">Corrective Actions</h2>
-              <p>Open, assigned, in progress, completed, and verified action tracking.</p>
-            </div>
-            <button class="primary-button" data-open-form="action" type="button">New action</button>
+        <section class="view" id="harvestsView">
+          <div class="section-head">
+            <h2>Récoltes par parcelle</h2>
+            <button class="primary-button" data-modal="harvest">Ajouter une récolte</button>
           </div>
-          <div class="kanban" id="actionsBoard"></div>
+          <div class="period-filter" id="harvestPeriodFilters"><label>Du<input type="date" data-period-key="harvests" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="harvests" data-period-bound="to" /></label><button class="text-button" data-period-reset="harvests">Réinitialiser</button></div>
+          <div class="harvest-layout">
+            <div class="panel">
+              <h2>Résumé par parcelle</h2>
+              <div class="harvest-summary" id="harvestSummary"></div>
+            </div>
+            <div class="table-wrap panel">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Parcelle</th>
+                    <th>Culture</th>
+                    <th>Quantité</th>
+                    <th>Qualité</th>
+                    <th>Destination</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="harvestsTable"></tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
-        <section class="content-view" id="trainingView" aria-labelledby="trainingHeading">
-          <div class="section-heading">
-            <div>
-              <h2 id="trainingHeading">Training And Certification</h2>
-              <p>Roadmap module for employee and contractor compliance tracking.</p>
+        <section class="view" id="stockView">
+          <div class="section-head">
+            <h2>Stock et intrants</h2>
+            <button class="primary-button" data-modal="stock">Ajouter un stock</button>
+          </div>
+          <div class="record-grid" id="stockGrid"></div>
+        </section>
+
+        <section class="view" id="financeView">
+          <div class="section-head">
+            <h2>Finances</h2>
+            <button class="primary-button" data-modal="finance">Ajouter une opération</button>
+          </div>
+          <div class="period-filter" id="financePeriodFilters"><label>Du<input type="date" data-period-key="finance" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="finance" data-period-bound="to" /></label><button class="text-button" data-period-reset="finance">Réinitialiser</button></div>
+          <div class="finance-layout">
+            <div class="panel">
+              <h2>Résumé</h2>
+              <div class="finance-summary" id="financeSummary"></div>
+            </div>
+            <div class="table-wrap panel finance-by-crop">
+              <div class="panel-head">
+                <h2>Recettes et dépenses par culture</h2>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Culture</th>
+                    <th>Recettes</th>
+                    <th>Dépenses</th>
+                    <th>Solde</th>
+                  </tr>
+                </thead>
+                <tbody id="financeByCropTable"></tbody>
+              </table>
+            </div>
+            <div class="table-wrap panel finance-transactions">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Libellé</th>
+                    <th>Culture</th>
+                    <th>Type</th>
+                    <th>Montant</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="financeTable"></tbody>
+              </table>
             </div>
           </div>
-          <div class="training-grid" id="trainingGrid"></div>
+        </section>
+
+        <section class="view" id="pricesView">
+          <div class="section-head">
+            <h2>Prix de vente des cultures</h2>
+            <button class="primary-button" data-modal="sale">Ajouter une vente</button>
+          </div>
+          <div class="period-filter" id="pricePeriodFilters"><label>Du<input type="date" data-period-key="prices" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="prices" data-period-bound="to" /></label><button class="text-button" data-period-reset="prices">Réinitialiser</button></div>
+          <div class="price-layout">
+            <div class="panel">
+              <h2>Culture</h2>
+              <div class="filter-bar" id="priceFilters"></div>
+              <div class="price-summary" id="priceSummary"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">
+                <h2>Évolution du prix unitaire</h2>
+              </div>
+              <div class="price-chart" id="priceChart"></div>
+            </div>
+          </div>
+          <div class="table-wrap panel finance-by-crop">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Culture</th>
+                  <th>Vente</th>
+                  <th>Quantité</th>
+                  <th>Prix unitaire</th>
+                </tr>
+              </thead>
+              <tbody id="priceSalesTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="profilesView">
+          <div class="section-head">
+            <h2>Profils d'accès</h2>
+            <button class="primary-button" data-modal="profile">Ajouter un profil</button>
+          </div>
+          <div class="record-grid" id="profilesGrid"></div>
+        </section>
+
+        <section class="view" id="teamView">
+          <div class="section-head">
+            <h2>Équipe et responsabilités</h2>
+            <button class="primary-button" data-modal="team">Ajouter une personne</button>
+          </div>
+          <div class="record-grid" id="teamGrid"></div>
         </section>
       </main>
     </div>
 
-    <dialog class="modal" id="recordModal">
+    <dialog id="recordModal">
       <form method="dialog" class="modal-card" id="recordForm">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow" id="modalEyebrow">New record</p>
-            <h2 id="modalTitle">Create record</h2>
-          </div>
-          <button class="icon-button" value="cancel" aria-label="Close" type="submit">x</button>
+        <div class="modal-head">
+          <h2 id="modalTitle">Ajouter</h2>
+          <button class="icon-only" type="button" data-close-dialog="recordModal" onclick="document.getElementById('recordModal').close()" aria-label="Fermer">x</button>
         </div>
-
-        <div class="form-grid">
-          <label>
-            <span>Type</span>
-            <select name="type" id="recordType"></select>
-          </label>
-          <label>
-            <span>Site</span>
-            <select name="site">
-              <option>Tarkwa North Pit</option>
-              <option>Processing Plant</option>
-              <option>Contractor Yard</option>
-            </select>
-          </label>
-          <label>
-            <span>Location</span>
-            <input name="location" placeholder="e.g. Haul road B4" required />
-          </label>
-          <label>
-            <span>Severity</span>
-            <select name="severity">
-              <option>High</option>
-              <option>Critical</option>
-              <option>Medium</option>
-              <option>Low</option>
-            </select>
-          </label>
-          <label class="full-field">
-            <span>Description</span>
-            <textarea name="description" rows="4" placeholder="Describe what happened or what was observed" required></textarea>
-          </label>
-          <label>
-            <span>Responsible person</span>
-            <input name="owner" placeholder="Assign owner" />
-          </label>
-          <label>
-            <span>Due date</span>
-            <input name="dueDate" type="date" />
-          </label>
-        </div>
-
-        <div class="ai-box">
-          <div>
-            <strong>AI assist</strong>
-            <p id="aiSuggestion">Describe the record to generate category, severity, and action suggestions.</p>
-          </div>
-          <button class="secondary-button" id="aiSuggestButton" type="button">Suggest</button>
-        </div>
-
-        <div class="modal-actions">
-          <button class="secondary-button" value="cancel" type="submit">Cancel</button>
-          <button class="primary-button" id="saveRecordButton" value="default" type="submit">Save record</button>
-        </div>
+        <div class="form-grid" id="modalFields"></div>
+        <menu class="modal-actions">
+          <button type="button" data-close-dialog="recordModal" onclick="document.getElementById('recordModal').close()">Annuler</button>
+          <button class="primary-button" id="saveRecordBtn" value="default">Enregistrer</button>
+        </menu>
       </form>
     </dialog>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js" type="module"></script>
+
+    <dialog id="passwordModal">
+      <form method="dialog" class="modal-card" id="passwordForm">
+        <div class="modal-head">
+          <h2>Changer mot de passe</h2>
+          <button class="icon-only" type="button" data-close-dialog="passwordModal" onclick="document.getElementById('passwordModal').close()" aria-label="Fermer">x</button>
+        </div>
+        <div class="form-grid">
+          <label>Identifiant<input name="login" type="text" readonly autocomplete="username" /></label>
+          <label>Ancien mot de passe<input name="currentPassword" type="password" required autocomplete="current-password" /></label>
+          <label class="password-field">Nouveau mot de passe<span><input name="newPassword" type="password" required minlength="4" autocomplete="new-password" /><button class="password-toggle" type="button" data-toggle-password="newPassword" aria-label="Afficher le nouveau mot de passe"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+          <label class="password-field">Confirmer<span><input name="confirmPassword" type="password" required minlength="4" autocomplete="new-password" /><button class="password-toggle" type="button" data-toggle-password="confirmPassword" aria-label="Afficher la confirmation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+          <p class="wide-field password-message" id="passwordMessage"></p>
+        </div>
+        <menu class="modal-actions">
+          <button type="button" data-close-dialog="passwordModal" onclick="document.getElementById('passwordModal').close()">Annuler</button>
+          <button class="primary-button" value="default">Mettre à jour</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script>
+      (function refreshStalePwaCache() {
+        var refreshKey = "agripilot-cache-refresh-v109";
+        if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
+        if (!("serviceWorker" in navigator) && !("caches" in window)) return;
+        localStorage.setItem(refreshKey, "done");
+        var unregisterWorkers = "serviceWorker" in navigator
+          ? navigator.serviceWorker.getRegistrations().then(function (registrations) {
+              return Promise.all(registrations.map(function (registration) {
+                return registration.unregister();
+              }));
+            })
+          : Promise.resolve();
+        var clearCaches = "caches" in window
+          ? caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) {
+                return caches.delete(key);
+              }));
+            })
+          : Promise.resolve();
+        Promise.all([unregisterWorkers, clearCaches]).finally(function () {
+          window.location.replace("./start.html?v=109");
+        });
+      })();
+    </script>
+    <script>
+      window.agriPilotLoginReady = false;
+      window.addEventListener("error", function (event) {
+        window.agriPilotStartupError = event.message || "Erreur JavaScript inconnue.";
+        var message = document.querySelector("#loginMessage");
+        if (message) {
+          message.textContent = "Erreur application : " + window.agriPilotStartupError;
+          message.className = "password-message error";
+        }
+      });
+      document.addEventListener("submit", function (event) {
+        if (!event.target || event.target.id !== "loginForm") return;
+        event.preventDefault();
+        if (window.agriPilotLoginReady) return;
+        var message = document.querySelector("#loginMessage");
+        if (message) {
+          message.textContent = window.agriPilotStartupError ? "Erreur application : " + window.agriPilotStartupError : "Chargement de l'application en cours. Si ce message reste affiché, le fichier app.js ne se charge pas.";
+          message.className = "password-message error";
+        }
+      }, true);
+    </script>
+    <script src="./app.js?v=109" defer></script>
   </body>
 </html>
