@@ -1,4 +1,4 @@
-﻿const stateKey = "agripilot-state-v1";
+const stateKey = "agripilot-state-v1";
 const activeProfileKey = "agripilot-active-profile-v1";
 const authUserKey = "agripilot-auth-user-v1";
 const lastRemoteSyncKey = "agripilot-last-remote-sync-v1";
@@ -1690,7 +1690,7 @@ function renderDashboard() {
   `).join("");
   renderWeather();
   const openPriorityTasks = state.tasks.filter((task) => taskStatus(task) !== "Terminé").slice(0, 4);
-  document.querySelector("#priorityTasks").innerHTML = openPriorityTasks.map(taskItem).join("") || `<p class="muted">Aucun travail ouvert.</p>`;
+  document.querySelector("#priorityTasks").innerHTML = openPriorityTasks.length ? openPriorityTasks.map(taskItem).join("") : `<p class="muted">Aucun travail ouvert.</p>`;
   document.querySelector("#fieldStrip").innerHTML = activeFields.slice(0, 3).map(fieldMini).join("");
   document.querySelector("#stockAlerts").innerHTML = lowStock().map((stock) => `
     <div class="stock-alert"><div><strong>${stock.item}</strong><span class="muted">${stock.quantity} ${stock.unit} restant</span></div><span class="status-pill late">Bas</span></div>
@@ -1854,7 +1854,7 @@ function baseTaskGeneratedToday(template) {
 
 function taskInstruction(task) {
   if (task.note) return task.note;
-  const template = (state.dailyTaskTemplates || []).find((item) => item.id === task.baseTaskId);
+  const template = (state.dailyTaskTemplates || []).find((item) => item.id === task.baseTaskId || item.title === task.title);
   return template ? template.note || "" : "";
 }
 
@@ -2993,5 +2993,8 @@ try {
 } catch (error) {
   showStartupError(error.message);
 }
+
+
+
 
 
