@@ -226,6 +226,7 @@ h2 { font-size: 1.05rem; margin-bottom: 0; }
 }
 .task-item:first-child, .stock-alert:first-child { border-top: 0; }
 .task-item strong, .record-card strong { display: block; }
+.task-note { display: block; margin-top: 5px; color: var(--muted); font-size: 0.82rem; line-height: 1.35; }
 .muted { color: var(--muted); font-size: 0.9rem; }
 .daily-task-panel { margin-bottom: 16px; }
 .daily-task-grid {

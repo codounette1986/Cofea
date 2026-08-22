@@ -39,6 +39,7 @@ create table if not exists public.tasks (
   owner text,
   due date,
   status text,
+  note text,
   updated_by text,
   deleted_at timestamptz,
   deleted_by text,
@@ -187,6 +188,7 @@ alter table public.tasks add column if not exists field text;
 alter table public.tasks add column if not exists owner text;
 alter table public.tasks add column if not exists due date;
 alter table public.tasks add column if not exists status text;
+alter table public.tasks add column if not exists note text;
 
 alter table public.daily_task_templates add column if not exists title text;
 alter table public.daily_task_templates add column if not exists active boolean;

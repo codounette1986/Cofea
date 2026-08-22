@@ -284,7 +284,8 @@ const modalConfig = {
       ["field", "Parcelle", "fieldSelect"],
       ["owner", "Responsable", "staffSelect"],
       ["due", "Échéance", "date"],
-      ["status", "Statut", "select", ["À faire", "En cours", "Terminé", "En retard"]]
+      ["status", "Statut", "select", ["À faire", "En cours", "Terminé", "En retard"]],
+      ["note", "Consigne", "textarea"]
     ]
   },
   baseTask: {
@@ -714,7 +715,8 @@ const remoteColumnMap = {
     field: "field",
     owner: "owner",
     due: "due",
-    status: "status"
+    status: "status",
+    note: "note"
   },
   dailyTaskTemplates: {
     title: "title",
@@ -1814,7 +1816,7 @@ function renderTasks() {
   setupTableSort("tasks", "#tasksView thead", ["title", "field", "owner", "due", "status", null], renderTasks);
   document.querySelector("#tasksTable").innerHTML = tasks.map((task) => `
     <tr>
-      <td><strong>${task.title}</strong></td>
+      <td><strong>${task.title}</strong>${taskInstruction(task) ? `<span class="task-note">${taskInstruction(task)}</span>` : ""}</td>
       <td>${task.field}</td>
       <td>${task.owner}</td>
       <td>${task.due}</td>
@@ -1850,6 +1852,12 @@ function baseTaskGeneratedToday(template) {
   return state.tasks.some((task) => task.due === today && (task.baseTaskId === template.id || task.title === template.title));
 }
 
+function taskInstruction(task) {
+  if (task.note) return task.note;
+  const template = (state.dailyTaskTemplates || []).find((item) => item.id === task.baseTaskId);
+  return template ? template.note || "" : "";
+}
+
 function ensureActiveBaseTasksForToday() {
   const templates = state.dailyTaskTemplates || [];
   let created = false;
@@ -1862,7 +1870,8 @@ function ensureActiveBaseTasksForToday() {
       field: template.crops && template.crops.length ? template.crops.join(", ") : "Toutes les cultures",
       owner: currentUserLabel(),
       due: currentDateValue(),
-      status: "À faire"
+      status: "À faire",
+      note: template.note || ""
     }));
     created = true;
   });
