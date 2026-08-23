@@ -108,6 +108,7 @@ create table if not exists public.finance (
   date date,
   label text,
   crop text,
+  assigned_to text,
   type text,
   amount numeric(14, 2),
   is_sale boolean,
@@ -223,6 +224,7 @@ alter table public.stock add column if not exists threshold numeric(12, 3);
 alter table public.finance add column if not exists date date;
 alter table public.finance add column if not exists label text;
 alter table public.finance add column if not exists crop text;
+alter table public.finance add column if not exists assigned_to text;
 alter table public.finance add column if not exists type text;
 alter table public.finance add column if not exists amount numeric(14, 2);
 alter table public.finance add column if not exists is_sale boolean;

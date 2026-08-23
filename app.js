@@ -331,6 +331,7 @@ const modalConfig = {
       ["date", "Date", "date"],
       ["label", "Libellé", "text"],
       ["crop", "Culture", "cropSelectOptional"],
+      ["assignedTo", "Utilisateur assigné", "financeAssigneeSelect"],
       ["type", "Type", "select", ["Recette", "Dépense"]],
       ["isSale", "C'est une vente", "checkbox"],
       ["amount", "Montant FCFA", "number"],
@@ -757,6 +758,7 @@ const remoteColumnMap = {
     date: "date",
     label: "label",
     crop: "crop",
+    assignedTo: "assigned_to",
     type: "type",
     amount: "amount",
     isSale: "is_sale",
@@ -2076,6 +2078,7 @@ function renderFinance() {
     date: (item) => item.date,
     label: (item) => item.label,
     crop: (item) => item.crop || "Non affecté",
+    user: (item) => financeRecordUserLabel(item),
     type: (item) => item.type,
     amount: (item) => Number(item.amount)
   });
@@ -2086,17 +2089,18 @@ function renderFinance() {
     ["Dépenses", money(expense)],
     ["Solde", money(revenue - expense)]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
-  setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "type", "amount", null], renderFinance);
+  setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "user", "type", "amount", null], renderFinance);
   document.querySelector("#financeTable").innerHTML = sortedFinanceRecords.map((item) => `
     <tr>
       <td>${item.date}</td>
       <td>${item.label}</td>
       <td>${item.crop || "Non affecté"}</td>
+      <td>${financeRecordUserLabel(item)}</td>
       <td>${item.type}</td>
       <td>${money(Number(item.amount))}</td>
       <td><button class="text-button" data-edit="${item.id}" data-type="finance">Modifier</button><button class="text-button" data-delete="${item.id}" data-collection="finance">Supprimer</button></td>
     </tr>
-  `).join("") || `<tr><td colspan="6">Aucune opération sur cette période.</td></tr>`;
+  `).join("") || `<tr><td colspan="7">Aucune opération sur cette période.</td></tr>`;
   const financeByCropRows = sortRows(financeByCrop(financeRecords), "financeByCrop", {
     crop: (item) => item.crop,
     revenue: (item) => item.revenue,
@@ -2135,10 +2139,15 @@ function renderFinanceUserFilter() {
 }
 
 function financeRecordUserLabel(record) {
-  const updatedBy = String(record.updatedBy || "").trim();
-  if (!updatedBy) return "Non défini";
-  const person = state.team.find((member) => [member.name, member.login, member.role, member.id].some((value) => String(value || "").trim().toLowerCase() === updatedBy.toLowerCase()));
-  return person ? person.name || person.login || updatedBy : updatedBy;
+  const assignedTo = financeRecordAssignee(record);
+  if (!assignedTo) return "Non assigné";
+  const person = state.team.find((member) => [member.name, member.login, member.role, member.id].some((value) => String(value || "").trim().toLowerCase() === assignedTo.toLowerCase()));
+  return person ? person.name || person.login || assignedTo : assignedTo;
+}
+
+function financeRecordAssignee(record) {
+  if (Object.prototype.hasOwnProperty.call(record, "assignedTo")) return String(record.assignedTo || "").trim();
+  return String(record.updatedBy || "").trim();
 }
 
 function canSeeAllFinanceOperations() {
@@ -2151,11 +2160,11 @@ function canSeeAllFinanceOperations() {
 function recordBelongsToCurrentUser(record) {
   const user = currentUser();
   if (!user) return false;
-  const updatedBy = String(record.updatedBy || "").trim().toLowerCase();
+  const assignedTo = financeRecordAssignee(record).toLowerCase();
   const aliases = [currentUserLabel(), user.name, user.login, user.role, user.id]
     .filter(Boolean)
     .map((value) => String(value).trim().toLowerCase());
-  return aliases.includes(updatedBy);
+  return aliases.includes(assignedTo);
 }
 
 function canAccessFinanceRecord(record) {
@@ -2467,6 +2476,20 @@ function staffOptions() {
   return state.team.map((person) => person.name);
 }
 
+function financeAssigneeOptions(currentValue = "") {
+  const options = [{ value: "", label: "Non assigné" }, ...state.team.map((person) => ({
+    value: person.id || person.name || person.login,
+    label: person.name || person.login || person.role || "Utilisateur"
+  }))];
+  const normalizedCurrent = String(currentValue || "").trim().toLowerCase();
+  if (normalizedCurrent && !options.some((option) => [option.value, option.label].some((value) => String(value || "").trim().toLowerCase() === normalizedCurrent))) {
+    options.push({ value: currentValue, label: currentValue });
+  }
+  const current = currentUser();
+  if (!options.length && current) return [{ value: current.id || current.name || current.login, label: currentUserLabel() }];
+  return options;
+}
+
 function currentProfile() {
   return state.profiles.find((profile) => profile.id === activeProfileId) || state.profiles[0] || starterState.profiles[0];
 }
@@ -2688,6 +2711,12 @@ function openModal(type, id = null) {
       const options = staffOptions();
       return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option, value)).join("")}</select></label>`;
     }
+    if (typeName === "financeAssigneeSelect") {
+      if (!canManageProfiles()) return "";
+      const selectedAssignee = value || "";
+      const options = financeAssigneeOptions(selectedAssignee);
+      return `<label>${label}<select name="${name}">${options.map((option) => optionTag(option.label, selectedAssignee, option.value)).join("")}</select></label>`;
+    }
     if (typeName === "textarea") {
       return `<label class="wide-field">${label}<textarea name="${name}" rows="4" placeholder="Exemple : feuilles jaunies sur 2 lignes, arrosage renforcé, plants en bonne reprise...">${safeValue}</textarea></label>`;
     }
@@ -2849,6 +2878,12 @@ function handleFormSubmit(event) {
   if (modalType === "task") data.status = taskStatus(data);
   if (data.health) data.health = Number.parseInt(data.health, 10);
   if (modalType === "finance") {
+    if (!canManageProfiles()) {
+      if (!editingRecord) data.assignedTo = (currentUser() && currentUser().id) || currentUserLabel();
+      else delete data.assignedTo;
+    } else {
+      data.assignedTo = data.assignedTo || "";
+    }
     data.isSale = event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.type === "hidden" ? event.currentTarget.elements.isSale.value : event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.checked ? "on" : "";
     const isSaleWithCrop = data.type === "Recette" && data.isSale && data.crop && data.crop !== "Non affecté";
     if (!isSaleWithCrop) {
@@ -3052,6 +3087,7 @@ try {
 } catch (error) {
   showStartupError(error.message);
 }
+
 
 
 
