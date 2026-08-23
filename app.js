@@ -1689,8 +1689,8 @@ function formatWeatherNumber(value) {
 }
 
 function renderDashboard() {
-  const expenses = state.finance.filter((item) => item.type === "Dépense").reduce((sum, item) => sum + Number(item.amount), 0);
-  const revenues = state.finance.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
+  const dashboardCash = cashTotals(state.finance.filter(isFinanceValidated));
+  const dashboardOpenAdvances = openAdvancesTotal(state.finance);
   const lateTasks = state.tasks.filter((task) => task.status === "En retard").length;
   const activeFields = state.fields.filter(isFieldActive);
   const area = activeFields.reduce((sum, field) => sum + Number(field.area), 0);
@@ -1699,7 +1699,7 @@ function renderDashboard() {
     ["Surface active", formatArea(area)],
     ["Travaux ouverts", state.tasks.filter((task) => task.status !== "Terminé").length],
     ["Récoltes kg", `${harvestWeight} kg`],
-    canSeeFinance() ? ["Solde estimé", money(revenues - expenses)] : ["Profil actif", currentProfile().role]
+    canSeeFinance() ? ["Solde caisse", money(dashboardCash.balance)] : ["Profil actif", currentProfile().role]
   ];
   document.querySelector("#kpiGrid").innerHTML = kpis.map(([label, value]) => `
     <article class="kpi"><span>${label}</span><strong>${value}</strong></article>
@@ -1725,10 +1725,11 @@ function renderDashboard() {
   document.querySelector("#revenueDetailsBtn").hidden = !showDashboardRevenue;
   document.querySelector("#revenueCard").innerHTML = showDashboardRevenue
     ? `
-      <strong>${money(revenues)}</strong>
-      <span>Revenus enregistrés</span>
-      <div class="summary-line"><span>Dépenses</span><strong>${money(expenses)}</strong></div>
-      <div class="summary-line"><span>Solde</span><strong>${money(revenues - expenses)}</strong></div>
+      <strong>${money(dashboardCash.balance)}</strong>
+      <span>Solde caisse validé</span>
+      <div class="summary-line"><span>Entrées caisse</span><strong>${money(dashboardCash.cashIn)}</strong></div>
+      <div class="summary-line"><span>Sorties caisse</span><strong>${money(dashboardCash.cashOut)}</strong></div>
+      <div class="summary-line"><span>Avances en cours</span><strong>${money(dashboardOpenAdvances)}</strong></div>
     `
     : `
       <strong>Masqué</strong>
@@ -2088,14 +2089,20 @@ function renderFinance() {
     amount: (item) => Number(item.amount)
   });
   const validatedFinanceRecords = financeRecords.filter(isFinanceValidated);
-  const revenue = validatedFinanceRecords.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
-  const expense = validatedFinanceRecords.filter((item) => item.type === "Dépense").reduce((sum, item) => sum + Number(item.amount), 0);
+  const totals = cashTotals(validatedFinanceRecords);
+  const openAdvances = openAdvancesTotal(financeRecords);
   const personalFinanceView = !canSeeAllFinanceOperations() || activeFinanceUserFilter !== "Tous";
-  document.querySelector("#financeSummary").innerHTML = [
-    [personalFinanceView ? "Mes recettes validées" : "Recettes validées", money(revenue)],
-    [personalFinanceView ? "Mes dépenses validées" : "Dépenses validées", money(expense)],
-    [personalFinanceView ? "Solde de mes opérations" : "Solde exploitation", money(revenue - expense)]
-  ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  const financeSummaryRows = personalFinanceView ? [
+    [personalFinanceView ? "Mes recettes validées" : "Recettes validées", money(totals.receipts)],
+    [personalFinanceView ? "Mes dépenses validées" : "Dépenses validées", money(totals.expenses)],
+    ["Solde caisse", money(totals.balance)]
+  ] : [
+    ["Entrées caisse", money(totals.cashIn)],
+    ["Sorties caisse", money(totals.cashOut)],
+    ["Solde caisse", money(totals.balance)],
+    ["Avances en cours", money(openAdvances)]
+  ];
+  document.querySelector("#financeSummary").innerHTML = financeSummaryRows.map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
   renderCashSummary(financeRecords);
   updateFinancePersonalLayout(personalFinanceView);
   setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "user", "type", "status", "amount", null], renderFinance);
@@ -2108,7 +2115,7 @@ function renderFinance() {
       <td>${item.type}</td>
       <td>${financeStatus(item)}</td>
       <td>${money(Number(item.amount))}</td>
-      <td><button class="text-button" data-edit="${item.id}" data-type="finance">Modifier</button><button class="text-button" data-delete="${item.id}" data-collection="finance">Supprimer</button></td>
+      <td>${financeActionButtons(item)}</td>
     </tr>
   `).join("") || `<tr><td colspan="8">Aucune opération sur cette période.</td></tr>`;
   const financeByCropRows = sortRows(financeByCrop(validatedFinanceRecords), "financeByCrop", {
@@ -2148,6 +2155,13 @@ function renderFinanceUserFilter() {
   select.value = activeFinanceUserFilter;
 }
 
+function financeActionButtons(record) {
+  return [
+    canEditFinanceRecord(record) ? `<button class="text-button" data-edit="${record.id}" data-type="finance">Modifier</button>` : "",
+    canDeleteFinanceRecord(record) ? `<button class="text-button" data-delete="${record.id}" data-collection="finance">Supprimer</button>` : ""
+  ].join("") || `<span class="muted">Verrouillé</span>`;
+}
+
 function renderCashSummary(records) {
   const cashPanel = document.querySelector("#cashSummary");
   const userPanel = document.querySelector("#userCashBalances");
@@ -2160,21 +2174,19 @@ function renderCashSummary(records) {
   }
   setPanelTitle("#financeCashPanel", "Caisse");
   setPanelTitle("#financeUserBalancePanel", "Soldes utilisateurs");
-  const cashIn = validated.filter((record) => ["Recette", "Retour caisse"].includes(record.type)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const cashOut = validated.filter((record) => ["Dépense", "Avance utilisateur"].includes(record.type)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const advances = validated.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const returns = validated.filter((record) => record.type === "Retour caisse").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const totals = cashTotals(validated);
+  const openAdvances = openAdvancesTotal(records);
   cashPanel.innerHTML = [
-    ["Solde caisse validé", money(cashIn - cashOut)],
-    ["Entrées validées", money(cashIn)],
-    ["Sorties validées", money(cashOut)],
-    ["Avances en cours", money(Math.max(0, advances - returns))],
+    ["Solde caisse validé", money(totals.balance)],
+    ["Entrées validées", money(totals.cashIn)],
+    ["Sorties validées", money(totals.cashOut)],
+    ["Avances en cours", money(openAdvances)],
     ["À valider", `${pendingCount} opération${pendingCount > 1 ? "s" : ""}`]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
-  const balances = userCashBalances(validated);
+  const balances = userCashBalances(records);
   userPanel.innerHTML = balances.length ? balances.map((item) => `
     <div class="summary-line">
-      <span>${item.user}</span>
+      <span>${item.user} - reste à justifier/rendre</span>
       <strong>${money(item.balance)}</strong>
     </div>
   `).join("") : `<p class="muted">Aucune avance utilisateur validée.</p>`;
@@ -2183,24 +2195,61 @@ function renderCashSummary(records) {
 function renderUserCashSummary(cashPanel, userPanel, records, validated, pendingCount) {
   setPanelTitle("#financeCashPanel", "Résumé");
   setPanelTitle("#financeUserBalancePanel", "Détail avances");
-  const advances = validated.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const expenses = validated.filter((record) => record.type === "Dépense").reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const returns = validated.filter((record) => record.type === "Retour caisse").reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const receipts = validated.filter((record) => record.type === "Recette").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const totals = cashTotals(validated);
+  const accountability = userAccountabilityTotals(records);
   const pendingAmount = records.filter((record) => !isFinanceFinal(record)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const balance = advances - expenses - returns;
   cashPanel.innerHTML = [
-    ["Avances reçues validées", money(advances)],
-    ["Dépenses validées", money(expenses)],
-    ["Retours caisse validés", money(returns)],
-    ["Solde à justifier / rendre", money(balance)],
+    ["Recettes validées", money(totals.receipts)],
+    ["Recettes à reverser", money(accountability.pendingReceipts)],
+    ["Avances reçues validées", money(totals.advances)],
+    ["Dépenses validées", money(totals.expenses)],
+    ["Retours caisse validés", money(totals.returns)],
+    ["Solde à jour", money(totals.balance)],
+    ["Solde à justifier / rendre", money(accountability.balance)],
     ["Opérations en attente", `${pendingCount} (${money(pendingAmount)})`]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
   userPanel.innerHTML = [
-    ["Recettes validées saisies", money(receipts)],
-    ["Avances moins dépenses", money(advances - expenses)],
-    ["Solde après retours", money(balance)]
+    ["Recettes validées saisies", money(totals.receipts)],
+    ["Avances moins dépenses", money(totals.advances - totals.expenses)],
+    ["Solde après retours", money(accountability.balance)]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+}
+
+function cashTotals(records = []) {
+  const receipts = records.filter((record) => record.type === "Recette").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const expenses = records.filter((record) => record.type === "Dépense").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const advances = records.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const returns = records.filter((record) => record.type === "Retour caisse").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const cashIn = receipts + returns;
+  const cashOut = expenses + advances;
+  return {
+    receipts,
+    expenses,
+    advances,
+    returns,
+    cashIn,
+    cashOut,
+    balance: cashIn - cashOut,
+    userBalance: advances - expenses - returns,
+    openAdvances: Math.max(0, advances - expenses - returns)
+  };
+}
+
+function openAdvancesTotal(records = []) {
+  return userCashBalances(records).reduce((sum, row) => sum + Math.max(0, row.balance), 0);
+}
+
+function userAccountabilityTotals(records = []) {
+  const validated = records.filter(isFinanceValidated);
+  const totals = cashTotals(validated);
+  const pendingReceipts = records
+    .filter((record) => record.type === "Recette" && !isFinanceFinal(record))
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  return {
+    ...totals,
+    pendingReceipts,
+    balance: totals.advances - totals.expenses - totals.returns + pendingReceipts
+  };
 }
 
 function updateFinancePersonalLayout(personalFinanceView) {
@@ -2220,15 +2269,15 @@ function userCashBalances(records) {
   records.forEach((record) => {
     const user = financeRecordUserLabel(record);
     if (!user || user === "Non assigné") return;
-    if (!balances.has(user)) balances.set(user, { user, advances: 0, expenses: 0, returns: 0 });
-    const row = balances.get(user);
-    if (record.type === "Avance utilisateur") row.advances += Number(record.amount || 0);
-    if (record.type === "Dépense") row.expenses += Number(record.amount || 0);
-    if (record.type === "Retour caisse") row.returns += Number(record.amount || 0);
+    if (!balances.has(user)) balances.set(user, { user, records: [] });
+    balances.get(user).records.push(record);
   });
   return Array.from(balances.values())
-    .map((row) => ({ ...row, balance: row.advances - row.expenses - row.returns }))
-    .filter((row) => row.advances || row.expenses || row.returns)
+    .map((row) => {
+      const totals = userAccountabilityTotals(row.records);
+      return { ...row, ...totals };
+    })
+    .filter((row) => row.advances || row.expenses || row.returns || row.pendingReceipts)
     .sort((a, b) => b.balance - a.balance);
 }
 
@@ -2274,6 +2323,22 @@ function recordBelongsToCurrentUser(record) {
 
 function canAccessFinanceRecord(record) {
   return canSeeAllFinanceOperations() || recordBelongsToCurrentUser(record);
+}
+
+function canEditFinanceRecord(record) {
+  if (!record) return canWriteModal("finance");
+  if (currentProfile().role === "Admin") return canAccessSection("finance:write");
+  if (!canAccessFinanceRecord(record) || !canAccessSection("finance:write")) return false;
+  if (record.type === "Avance utilisateur") return false;
+  return !isFinanceValidated(record);
+}
+
+function canDeleteFinanceRecord(record) {
+  if (!record) return canDeleteCollection("finance");
+  if (currentProfile().role === "Admin") return canAccessSection("finance:delete");
+  if (!canAccessFinanceRecord(record) || !canAccessSection("finance:delete")) return false;
+  if (record.type === "Avance utilisateur") return false;
+  return !isFinanceValidated(record);
 }
 
 function renderPrices() {
@@ -2774,7 +2839,7 @@ function openModal(type, id = null) {
   const config = modalConfig[modalType];
   const rawRecord = id ? state[config.collection].find((item) => item.id === id) : null;
   const record = rawRecord && modalType === "team" ? teamRecordWithAccount(rawRecord) : rawRecord;
-  if (modalType === "finance" && record && !canAccessFinanceRecord(record)) return;
+  if (modalType === "finance" && record && !canEditFinanceRecord(record)) return;
   const saleDefaults = saleShortcut ? { type: "Recette", isSale: "on", saleUnit: "kg" } : {};
   editingRecord = record ? { collection: config.collection, id } : null;
   document.querySelector("#modalTitle").textContent = saleShortcut ? "Ajouter une vente" : record ? config.title.replace("Ajouter", "Modifier") : config.title;
@@ -2965,6 +3030,10 @@ function handleFormSubmit(event) {
   const config = modalConfig[modalType];
   if (!canWriteModal(modalAccessType || modalType)) return;
   if (modalType === "team" && !canManageTeam()) return;
+  if (modalType === "finance" && editingRecord) {
+    const existingRecord = state.finance.find((item) => item.id === editingRecord.id);
+    if (!canEditFinanceRecord(existingRecord)) return;
+  }
   const data = Object.fromEntries(new FormData(event.currentTarget).entries());
   config.fields.forEach(([name, , typeName]) => {
     if (typeName === "number") data[name] = Number(data[name]);
@@ -3160,7 +3229,7 @@ function deleteRecord(collection, id) {
   if (!canDeleteCollection(collection)) return;
   if (collection === "finance") {
     const record = state.finance.find((item) => item.id === id);
-    if (record && !canAccessFinanceRecord(record)) return;
+    if (record && !canDeleteFinanceRecord(record)) return;
   }
   if (collection === "team" && !canManageTeam()) return;
   state[collection] = state[collection].filter((item) => item.id !== id);
