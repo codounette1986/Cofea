@@ -2097,6 +2097,7 @@ function renderFinance() {
     [personalFinanceView ? "Solde de mes opérations" : "Solde exploitation", money(revenue - expense)]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
   renderCashSummary(financeRecords);
+  updateFinancePersonalLayout(personalFinanceView);
   setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "user", "type", "status", "amount", null], renderFinance);
   document.querySelector("#financeTable").innerHTML = sortedFinanceRecords.map((item) => `
     <tr>
@@ -2180,7 +2181,7 @@ function renderCashSummary(records) {
 }
 
 function renderUserCashSummary(cashPanel, userPanel, records, validated, pendingCount) {
-  setPanelTitle("#financeCashPanel", "Mon solde caisse");
+  setPanelTitle("#financeCashPanel", "Résumé");
   setPanelTitle("#financeUserBalancePanel", "Détail avances");
   const advances = validated.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const expenses = validated.filter((record) => record.type === "Dépense").reduce((sum, record) => sum + Number(record.amount || 0), 0);
@@ -2200,6 +2201,13 @@ function renderUserCashSummary(cashPanel, userPanel, records, validated, pending
     ["Avances moins dépenses", money(advances - expenses)],
     ["Solde après retours", money(balance)]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+}
+
+function updateFinancePersonalLayout(personalFinanceView) {
+  ["#financeMainSummaryPanel", "#financeUserBalancePanel", "#financeByCropPanel"].forEach((selector) => {
+    const node = document.querySelector(selector);
+    if (node) node.classList.toggle("personal-finance-hidden", personalFinanceView);
+  });
 }
 
 function setPanelTitle(selector, title) {

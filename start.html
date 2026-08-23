@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=121" />
+    <link rel="manifest" href="./manifest.webmanifest?v=122" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=121" />
+    <link rel="stylesheet" href="./styles.css?v=122" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -209,7 +209,7 @@
           <div class="period-filter" id="financePeriodFilters"><label>Du<input type="date" data-period-key="finance" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="finance" data-period-bound="to" /></label><button class="text-button" data-period-reset="finance">Réinitialiser</button></div>
           <div class="period-filter finance-user-filter" id="financeUserFilters"><label>Utilisateur<select id="financeUserFilter"></select></label></div>
           <div class="finance-layout">
-            <div class="panel">
+            <div class="panel" id="financeMainSummaryPanel">
               <h2>Résumé</h2>
               <div class="finance-summary" id="financeSummary"></div>
             </div>
@@ -221,7 +221,7 @@
               <h2>Soldes utilisateurs</h2>
               <div class="finance-summary" id="userCashBalances"></div>
             </div>
-            <div class="table-wrap panel finance-by-crop">
+            <div class="table-wrap panel finance-by-crop" id="financeByCropPanel">
               <div class="panel-head">
                 <h2>Recettes et dépenses par culture</h2>
               </div>
@@ -347,7 +347,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v121";
+        var refreshKey = "agripilot-cache-refresh-v122";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -366,7 +366,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=121");
+          window.location.replace("./start.html?v=122");
         });
       })();
     </script>
@@ -391,9 +391,10 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=121" defer></script>
+    <script src="./app.js?v=122" defer></script>
   </body>
 </html>
+
 
 
 
