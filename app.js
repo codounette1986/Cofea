@@ -115,6 +115,7 @@ let activeUserId = sessionStorage.getItem(authUserKey) || "";
 let syncTimer = null;
 let autoSyncTimer = null;
 let syncInProgress = false;
+let remoteWriteInProgress = false;
 let weatherForecast = loadCachedWeather();
 let weatherLocation = loadCachedWeatherLocation();
 let weatherInProgress = false;
@@ -682,9 +683,14 @@ function supabaseHeaders(extra = {}) {
 
 async function supabaseRequest(url, options = {}) {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 8000);
+  const timeout = window.setTimeout(() => controller.abort(), 20000);
   try {
     return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new Error("Délai Supabase dépassé. Vérifiez la connexion puis relancez la synchronisation.");
+    }
+    throw error;
   } finally {
     window.clearTimeout(timeout);
   }
@@ -965,9 +971,13 @@ async function fetchRemoteState() {
   const remoteMeta = await fetchRemoteMeta();
   if (!remoteMeta) return null;
   const remoteData = { updatedAt: remoteMeta.updated_at };
-  for (const collection of syncedCollections()) {
-    remoteData[collection] = await fetchRemoteCollection(collection, { includeDeleted: true }).catch(() => []);
-  }
+  const collections = await Promise.all(syncedCollections().map(async (collection) => [
+    collection,
+    await fetchRemoteCollection(collection, { includeDeleted: true }).catch(() => [])
+  ]));
+  collections.forEach(([collection, rows]) => {
+    remoteData[collection] = rows;
+  });
   return { data: remoteData, updated_at: remoteMeta.updated_at };
 }
 
@@ -1068,13 +1078,19 @@ async function saveRemoteMeta() {
 
 async function pushRemoteState() {
   if (!supabaseEnabled() || !navigator.onLine) return;
-  setSyncStatus("syncing", "Synchronisation Supabase...");
-  for (const collection of syncedCollections()) {
-    await replaceRemoteCollection(collection);
+  if (remoteWriteInProgress) return;
+  remoteWriteInProgress = true;
+  try {
+    setSyncStatus("syncing", "Synchronisation Supabase...");
+    for (const collection of syncedCollections()) {
+      await replaceRemoteCollection(collection);
+    }
+    await saveRemoteMeta();
+    saveState({ sync: false, touch: false });
+    markRemoteSynced();
+  } finally {
+    remoteWriteInProgress = false;
   }
-  await saveRemoteMeta();
-  saveState({ sync: false, touch: false });
-  markRemoteSynced();
 }
 
 function scheduleRemoteSave() {
@@ -1084,6 +1100,10 @@ function scheduleRemoteSave() {
   }
   window.clearTimeout(syncTimer);
   syncTimer = window.setTimeout(() => {
+    if (syncInProgress || remoteWriteInProgress) {
+      scheduleRemoteSave();
+      return;
+    }
     pushRemoteState().catch((error) => setSyncStatus("error", error.message));
   }, 700);
 }
@@ -1110,12 +1130,19 @@ async function syncFromSupabase() {
   syncInProgress = true;
   setSyncStatus("syncing", "Lecture Supabase...");
   try {
+    const localUpdatedAt = state.updatedAt;
+    const localHasPendingDeletes = syncedCollections().some((collection) =>
+      Object.keys(collectionObject((state.deletedRecords || {})[collection])).length
+    );
     const remoteRow = await fetchRemoteState();
     if (!remoteRow || !remoteRow.data) {
       await pushRemoteState();
       return;
     }
     const remoteData = remoteRow.data;
+    const localTime = new Date(localUpdatedAt || 0).getTime();
+    const remoteTime = new Date(remoteData.updatedAt || remoteRow.updated_at || 0).getTime();
+    const shouldPushAfterMerge = (Number.isFinite(localTime) && Number.isFinite(remoteTime) && localTime > remoteTime) || localHasPendingDeletes;
     const localAccounts = userAccountsFromTeam(state.team || []);
     if (!hasUsableAccounts(remoteData.userAccounts) && hasUsableAccounts(localAccounts)) {
       state.userAccounts = localAccounts;
@@ -1124,7 +1151,11 @@ async function syncFromSupabase() {
     }
     mergeRemoteState(remoteData);
     saveState({ sync: false, touch: false });
-    await pushRemoteState();
+    if (shouldPushAfterMerge) {
+      await pushRemoteState();
+    } else {
+      markRemoteSynced();
+    }
     render();
   } catch (error) {
     setSyncStatus("error", error.message);
