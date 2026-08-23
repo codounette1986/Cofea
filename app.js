@@ -2152,6 +2152,12 @@ function renderCashSummary(records) {
   if (!cashPanel || !userPanel) return;
   const validated = records.filter(isFinanceValidated);
   const pendingCount = records.filter((record) => !isFinanceFinal(record)).length;
+  if (!canSeeAllFinanceOperations() || activeFinanceUserFilter !== "Tous") {
+    renderUserCashSummary(cashPanel, userPanel, records, validated, pendingCount);
+    return;
+  }
+  setPanelTitle("#financeCashPanel", "Caisse");
+  setPanelTitle("#financeUserBalancePanel", "Soldes utilisateurs");
   const cashIn = validated.filter((record) => ["Recette", "Retour caisse"].includes(record.type)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const cashOut = validated.filter((record) => ["Dépense", "Avance utilisateur"].includes(record.type)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const advances = validated.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
@@ -2170,6 +2176,34 @@ function renderCashSummary(records) {
       <strong>${money(item.balance)}</strong>
     </div>
   `).join("") : `<p class="muted">Aucune avance utilisateur validée.</p>`;
+}
+
+function renderUserCashSummary(cashPanel, userPanel, records, validated, pendingCount) {
+  setPanelTitle("#financeCashPanel", "Mon solde caisse");
+  setPanelTitle("#financeUserBalancePanel", "Détail avances");
+  const advances = validated.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const expenses = validated.filter((record) => record.type === "Dépense").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const returns = validated.filter((record) => record.type === "Retour caisse").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const receipts = validated.filter((record) => record.type === "Recette").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const pendingAmount = records.filter((record) => !isFinanceFinal(record)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const balance = advances - expenses - returns;
+  cashPanel.innerHTML = [
+    ["Avances reçues validées", money(advances)],
+    ["Dépenses validées", money(expenses)],
+    ["Retours caisse validés", money(returns)],
+    ["Solde à justifier / rendre", money(balance)],
+    ["Opérations en attente", `${pendingCount} (${money(pendingAmount)})`]
+  ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  userPanel.innerHTML = [
+    ["Recettes validées saisies", money(receipts)],
+    ["Avances moins dépenses", money(advances - expenses)],
+    ["Solde après retours", money(balance)]
+  ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+}
+
+function setPanelTitle(selector, title) {
+  const heading = document.querySelector(`${selector} h2`);
+  if (heading) heading.textContent = title;
 }
 
 function userCashBalances(records) {
