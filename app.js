@@ -219,9 +219,11 @@ const accessSections = {
     { id: "finance:summary", label: "Résumé financier" },
     { id: "finance:operations", label: "Tableau des opérations" },
     { id: "finance:byCrop", label: "Recettes et dépenses par culture" },
+    { id: "finance:cash", label: "Caisse et avances" },
     { id: "finance:userFilter", label: "Filtre par utilisateur" },
     { id: "finance:allOperations", label: "Voir toutes les opérations" },
     { id: "finance:ownOperations", label: "Voir seulement ses opérations" },
+    { id: "finance:validate", label: "Validation caisse" },
     { id: "finance:write", label: "Ajout / modification" },
     { id: "finance:delete", label: "Suppression" }
   ],
@@ -332,7 +334,8 @@ const modalConfig = {
       ["label", "Libellé", "text"],
       ["crop", "Culture", "cropSelectOptional"],
       ["assignedTo", "Utilisateur assigné", "financeAssigneeSelect"],
-      ["type", "Type", "select", ["Recette", "Dépense"]],
+      ["type", "Type", "select", ["Recette", "Dépense", "Avance utilisateur", "Retour caisse"]],
+      ["status", "Statut", "financeStatusSelect", ["Brouillon", "Soumis", "Validé", "Rejeté"]],
       ["isSale", "C'est une vente", "checkbox"],
       ["amount", "Montant FCFA", "number"],
       ["saleQuantity", "Quantité vendue", "number"],
@@ -760,6 +763,7 @@ const remoteColumnMap = {
     crop: "crop",
     assignedTo: "assigned_to",
     type: "type",
+    status: "status",
     amount: "amount",
     isSale: "is_sale",
     saleQuantity: "sale_quantity",
@@ -2080,16 +2084,19 @@ function renderFinance() {
     crop: (item) => item.crop || "Non affecté",
     user: (item) => financeRecordUserLabel(item),
     type: (item) => item.type,
+    status: (item) => financeStatus(item),
     amount: (item) => Number(item.amount)
   });
-  const revenue = financeRecords.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
-  const expense = financeRecords.filter((item) => item.type !== "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
+  const validatedFinanceRecords = financeRecords.filter(isFinanceValidated);
+  const revenue = validatedFinanceRecords.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
+  const expense = validatedFinanceRecords.filter((item) => item.type === "Dépense").reduce((sum, item) => sum + Number(item.amount), 0);
   document.querySelector("#financeSummary").innerHTML = [
-    ["Recettes", money(revenue)],
-    ["Dépenses", money(expense)],
-    ["Solde", money(revenue - expense)]
+    ["Recettes validées", money(revenue)],
+    ["Dépenses validées", money(expense)],
+    ["Solde exploitation", money(revenue - expense)]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
-  setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "user", "type", "amount", null], renderFinance);
+  renderCashSummary(financeRecords);
+  setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "user", "type", "status", "amount", null], renderFinance);
   document.querySelector("#financeTable").innerHTML = sortedFinanceRecords.map((item) => `
     <tr>
       <td>${item.date}</td>
@@ -2097,11 +2104,12 @@ function renderFinance() {
       <td>${item.crop || "Non affecté"}</td>
       <td>${financeRecordUserLabel(item)}</td>
       <td>${item.type}</td>
+      <td>${financeStatus(item)}</td>
       <td>${money(Number(item.amount))}</td>
       <td><button class="text-button" data-edit="${item.id}" data-type="finance">Modifier</button><button class="text-button" data-delete="${item.id}" data-collection="finance">Supprimer</button></td>
     </tr>
-  `).join("") || `<tr><td colspan="7">Aucune opération sur cette période.</td></tr>`;
-  const financeByCropRows = sortRows(financeByCrop(financeRecords), "financeByCrop", {
+  `).join("") || `<tr><td colspan="8">Aucune opération sur cette période.</td></tr>`;
+  const financeByCropRows = sortRows(financeByCrop(validatedFinanceRecords), "financeByCrop", {
     crop: (item) => item.crop,
     revenue: (item) => item.revenue,
     expense: (item) => item.expense,
@@ -2136,6 +2144,61 @@ function renderFinanceUserFilter() {
   if (!labels.includes(activeFinanceUserFilter)) activeFinanceUserFilter = "Tous";
   select.innerHTML = labels.map((label) => optionTag(label, activeFinanceUserFilter)).join("");
   select.value = activeFinanceUserFilter;
+}
+
+function renderCashSummary(records) {
+  const cashPanel = document.querySelector("#cashSummary");
+  const userPanel = document.querySelector("#userCashBalances");
+  if (!cashPanel || !userPanel) return;
+  const validated = records.filter(isFinanceValidated);
+  const pendingCount = records.filter((record) => !isFinanceFinal(record)).length;
+  const cashIn = validated.filter((record) => ["Recette", "Retour caisse"].includes(record.type)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const cashOut = validated.filter((record) => ["Dépense", "Avance utilisateur"].includes(record.type)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const advances = validated.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const returns = validated.filter((record) => record.type === "Retour caisse").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  cashPanel.innerHTML = [
+    ["Solde caisse validé", money(cashIn - cashOut)],
+    ["Entrées validées", money(cashIn)],
+    ["Sorties validées", money(cashOut)],
+    ["Avances en cours", money(Math.max(0, advances - returns))],
+    ["À valider", `${pendingCount} opération${pendingCount > 1 ? "s" : ""}`]
+  ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  const balances = userCashBalances(validated);
+  userPanel.innerHTML = balances.length ? balances.map((item) => `
+    <div class="summary-line">
+      <span>${item.user}</span>
+      <strong>${money(item.balance)}</strong>
+    </div>
+  `).join("") : `<p class="muted">Aucune avance utilisateur validée.</p>`;
+}
+
+function userCashBalances(records) {
+  const balances = new Map();
+  records.forEach((record) => {
+    const user = financeRecordUserLabel(record);
+    if (!user || user === "Non assigné") return;
+    if (!balances.has(user)) balances.set(user, { user, advances: 0, expenses: 0, returns: 0 });
+    const row = balances.get(user);
+    if (record.type === "Avance utilisateur") row.advances += Number(record.amount || 0);
+    if (record.type === "Dépense") row.expenses += Number(record.amount || 0);
+    if (record.type === "Retour caisse") row.returns += Number(record.amount || 0);
+  });
+  return Array.from(balances.values())
+    .map((row) => ({ ...row, balance: row.advances - row.expenses - row.returns }))
+    .filter((row) => row.advances || row.expenses || row.returns)
+    .sort((a, b) => b.balance - a.balance);
+}
+
+function financeStatus(record) {
+  return record.status || "Validé";
+}
+
+function isFinanceValidated(record) {
+  return financeStatus(record) === "Validé";
+}
+
+function isFinanceFinal(record) {
+  return ["Validé", "Rejeté"].includes(financeStatus(record));
 }
 
 function financeRecordUserLabel(record) {
@@ -2344,7 +2407,7 @@ function financeByCrop(records = state.finance) {
     return {
       crop,
       revenue: cropRecords.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0),
-      expense: cropRecords.filter((item) => item.type !== "Recette").reduce((sum, item) => sum + Number(item.amount), 0)
+      expense: cropRecords.filter((item) => item.type === "Dépense").reduce((sum, item) => sum + Number(item.amount), 0)
     };
   }).filter((item) => item.revenue || item.expense || item.crop !== "Non affecté");
 }
@@ -2507,6 +2570,10 @@ function canManageTeam() {
   return currentProfile().role === "Admin";
 }
 
+function canValidateFinance() {
+  return currentProfile().role === "Admin" || canAccessSection("finance:validate");
+}
+
 const modalWriteSections = {
   field: "fields:write",
   crop: "crops:write",
@@ -2590,6 +2657,8 @@ function applySectionAccess() {
     ["#stockGrid", "stock:list"],
     ['[data-modal="stock"]', "stock:write"],
     ["#financeSummary", "finance:summary"],
+    ["#financeCashPanel", "finance:cash"],
+    ["#financeUserBalancePanel", "finance:cash"],
     ["#financePeriodFilters", "finance:operations"],
     ["#financeUserFilters", "finance:userFilter"],
     ["#financeTable", "finance:operations"],
@@ -2716,6 +2785,11 @@ function openModal(type, id = null) {
       const selectedAssignee = value || "";
       const options = financeAssigneeOptions(selectedAssignee);
       return `<label>${label}<select name="${name}">${options.map((option) => optionTag(option.label, selectedAssignee, option.value)).join("")}</select></label>`;
+    }
+    if (typeName === "financeStatusSelect") {
+      const selectedStatus = value || (canValidateFinance() ? "Validé" : "Soumis");
+      if (!canValidateFinance()) return `<input type="hidden" name="${name}" value="${escapeHtml(selectedStatus)}" />`;
+      return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option, selectedStatus)).join("")}</select></label>`;
     }
     if (typeName === "textarea") {
       return `<label class="wide-field">${label}<textarea name="${name}" rows="4" placeholder="Exemple : feuilles jaunies sur 2 lignes, arrosage renforcé, plants en bonne reprise...">${safeValue}</textarea></label>`;
@@ -2883,6 +2957,12 @@ function handleFormSubmit(event) {
       else delete data.assignedTo;
     } else {
       data.assignedTo = data.assignedTo || "";
+    }
+    if (!canValidateFinance()) {
+      const existingRecord = editingRecord ? state.finance.find((item) => item.id === editingRecord.id) : null;
+      data.status = existingRecord && existingRecord.status ? existingRecord.status : "Soumis";
+    } else {
+      data.status = data.status || "Validé";
     }
     data.isSale = event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.type === "hidden" ? event.currentTarget.elements.isSale.value : event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.checked ? "on" : "";
     const isSaleWithCrop = data.type === "Recette" && data.isSale && data.crop && data.crop !== "Non affecté";
