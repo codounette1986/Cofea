@@ -1730,6 +1730,7 @@ function renderDashboard() {
       <div class="summary-line"><span>Solde d'exploitation</span><strong>${money(dashboardCash.receipts - dashboardCash.expenses)}</strong></div>
       <div class="summary-line"><span>Entrées caisse</span><strong>${money(dashboardCash.cashIn)}</strong></div>
       <div class="summary-line"><span>Dépenses validées</span><strong>${money(dashboardCash.expenses)}</strong></div>
+      <div class="summary-line"><span>Dépenses payées caisse</span><strong>${money(dashboardCash.cashExpenses)}</strong></div>
       <div class="summary-line"><span>Avances données</span><strong>${money(dashboardCash.advances)}</strong></div>
       <div class="summary-line"><span>Sorties caisse</span><strong>${money(dashboardCash.cashOut)}</strong></div>
       <div class="summary-line"><span>Avances en cours</span><strong>${money(dashboardOpenAdvances)}</strong></div>
@@ -2103,6 +2104,7 @@ function renderFinance() {
     ["Solde d'exploitation", money(totals.receipts - totals.expenses)],
     ["Entrées caisse", money(totals.cashIn)],
     ["Dépenses validées", money(totals.expenses)],
+    ["Dépenses payées caisse", money(totals.cashExpenses)],
     ["Avances données", money(totals.advances)],
     ["Sorties caisse", money(totals.cashOut)],
     ["Solde caisse", money(totals.balance)],
@@ -2186,6 +2188,7 @@ function renderCashSummary(records) {
     ["Solde caisse validé", money(totals.balance)],
     ["Entrées validées", money(totals.cashIn)],
     ["Dépenses validées", money(totals.expenses)],
+    ["Dépenses payées caisse", money(totals.cashExpenses)],
     ["Avances données", money(totals.advances)],
     ["Sorties validées", money(totals.cashOut)],
     ["Avances en cours", money(openAdvances)],
@@ -2226,13 +2229,17 @@ function renderUserCashSummary(cashPanel, userPanel, records, validated, pending
 function cashTotals(records = []) {
   const receipts = records.filter((record) => record.type === "Recette").reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const expenses = records.filter((record) => record.type === "Dépense").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const cashExpenses = records
+    .filter((record) => record.type === "Dépense" && !financeRecordAssignee(record))
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const advances = records.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const returns = records.filter((record) => record.type === "Retour caisse").reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const cashIn = receipts + returns;
-  const cashOut = expenses + advances;
+  const cashOut = cashExpenses + advances;
   return {
     receipts,
     expenses,
+    cashExpenses,
     advances,
     returns,
     cashIn,
