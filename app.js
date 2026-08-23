@@ -2792,7 +2792,7 @@ function openModal(type, id = null) {
       return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option, selectedStatus)).join("")}</select></label>`;
     }
     if (typeName === "financeTypeSelect") {
-      const allowedTypes = canValidateFinance() ? options : ["Dépense", "Retour caisse"];
+      const allowedTypes = canValidateFinance() ? options : ["Recette", "Dépense", "Retour caisse"];
       const selectedType = allowedTypes.includes(value) ? value : allowedTypes[0];
       return `<label>${label}<select name="${name}" required>${allowedTypes.map((option) => optionTag(option, selectedType)).join("")}</select></label>`;
     }
@@ -2957,7 +2957,7 @@ function handleFormSubmit(event) {
   if (modalType === "task") data.status = taskStatus(data);
   if (data.health) data.health = Number.parseInt(data.health, 10);
   if (modalType === "finance") {
-    if (!canValidateFinance() && !["Dépense", "Retour caisse"].includes(data.type)) data.type = "Dépense";
+    if (!canValidateFinance() && !["Recette", "Dépense", "Retour caisse"].includes(data.type)) data.type = "Dépense";
     if (!canManageProfiles()) {
       if (!editingRecord) data.assignedTo = (currentUser() && currentUser().id) || currentUserLabel();
       else delete data.assignedTo;
@@ -3173,6 +3173,7 @@ try {
 } catch (error) {
   showStartupError(error.message);
 }
+
 
 
 
