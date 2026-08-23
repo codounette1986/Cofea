@@ -1699,7 +1699,7 @@ function renderDashboard() {
     ["Surface active", formatArea(area)],
     ["Travaux ouverts", state.tasks.filter((task) => task.status !== "Terminé").length],
     ["Récoltes kg", `${harvestWeight} kg`],
-    canSeeFinance() ? ["Solde caisse", money(dashboardCash.balance)] : ["Profil actif", currentProfile().role]
+    canSeeFinance() ? ["Solde exploitation", money(dashboardCash.receipts - dashboardCash.expenses)] : ["Profil actif", currentProfile().role]
   ];
   document.querySelector("#kpiGrid").innerHTML = kpis.map(([label, value]) => `
     <article class="kpi"><span>${label}</span><strong>${value}</strong></article>
@@ -1727,7 +1727,10 @@ function renderDashboard() {
     ? `
       <strong>${money(dashboardCash.balance)}</strong>
       <span>Solde caisse validé</span>
+      <div class="summary-line"><span>Solde d'exploitation</span><strong>${money(dashboardCash.receipts - dashboardCash.expenses)}</strong></div>
       <div class="summary-line"><span>Entrées caisse</span><strong>${money(dashboardCash.cashIn)}</strong></div>
+      <div class="summary-line"><span>Dépenses validées</span><strong>${money(dashboardCash.expenses)}</strong></div>
+      <div class="summary-line"><span>Avances données</span><strong>${money(dashboardCash.advances)}</strong></div>
       <div class="summary-line"><span>Sorties caisse</span><strong>${money(dashboardCash.cashOut)}</strong></div>
       <div class="summary-line"><span>Avances en cours</span><strong>${money(dashboardOpenAdvances)}</strong></div>
     `
@@ -2097,7 +2100,10 @@ function renderFinance() {
     [personalFinanceView ? "Mes dépenses validées" : "Dépenses validées", money(totals.expenses)],
     ["Solde caisse", money(totals.balance)]
   ] : [
+    ["Solde d'exploitation", money(totals.receipts - totals.expenses)],
     ["Entrées caisse", money(totals.cashIn)],
+    ["Dépenses validées", money(totals.expenses)],
+    ["Avances données", money(totals.advances)],
     ["Sorties caisse", money(totals.cashOut)],
     ["Solde caisse", money(totals.balance)],
     ["Avances en cours", money(openAdvances)]
@@ -2179,6 +2185,8 @@ function renderCashSummary(records) {
   cashPanel.innerHTML = [
     ["Solde caisse validé", money(totals.balance)],
     ["Entrées validées", money(totals.cashIn)],
+    ["Dépenses validées", money(totals.expenses)],
+    ["Avances données", money(totals.advances)],
     ["Sorties validées", money(totals.cashOut)],
     ["Avances en cours", money(openAdvances)],
     ["À valider", `${pendingCount} opération${pendingCount > 1 ? "s" : ""}`]
