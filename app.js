@@ -334,7 +334,7 @@ const modalConfig = {
       ["label", "Libellé", "text"],
       ["crop", "Culture", "cropSelectOptional"],
       ["assignedTo", "Utilisateur assigné", "financeAssigneeSelect"],
-      ["type", "Type", "select", ["Recette", "Dépense", "Avance utilisateur", "Retour caisse"]],
+      ["type", "Type", "financeTypeSelect", ["Recette", "Dépense", "Avance utilisateur", "Retour caisse"]],
       ["status", "Statut", "financeStatusSelect", ["Brouillon", "Soumis", "Validé", "Rejeté"]],
       ["isSale", "C'est une vente", "checkbox"],
       ["amount", "Montant FCFA", "number"],
@@ -2791,6 +2791,11 @@ function openModal(type, id = null) {
       if (!canValidateFinance()) return `<input type="hidden" name="${name}" value="${escapeHtml(selectedStatus)}" />`;
       return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option, selectedStatus)).join("")}</select></label>`;
     }
+    if (typeName === "financeTypeSelect") {
+      const allowedTypes = canValidateFinance() ? options : ["Dépense", "Retour caisse"];
+      const selectedType = allowedTypes.includes(value) ? value : allowedTypes[0];
+      return `<label>${label}<select name="${name}" required>${allowedTypes.map((option) => optionTag(option, selectedType)).join("")}</select></label>`;
+    }
     if (typeName === "textarea") {
       return `<label class="wide-field">${label}<textarea name="${name}" rows="4" placeholder="Exemple : feuilles jaunies sur 2 lignes, arrosage renforcé, plants en bonne reprise...">${safeValue}</textarea></label>`;
     }
@@ -2952,6 +2957,7 @@ function handleFormSubmit(event) {
   if (modalType === "task") data.status = taskStatus(data);
   if (data.health) data.health = Number.parseInt(data.health, 10);
   if (modalType === "finance") {
+    if (!canValidateFinance() && !["Dépense", "Retour caisse"].includes(data.type)) data.type = "Dépense";
     if (!canManageProfiles()) {
       if (!editingRecord) data.assignedTo = (currentUser() && currentUser().id) || currentUserLabel();
       else delete data.assignedTo;
