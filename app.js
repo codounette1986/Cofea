@@ -93,6 +93,7 @@ let state;
 let currentView = "dashboard";
 let activeTaskFilter = "Tous";
 let activePriceCrop = "Toutes";
+let activeFinanceUserFilter = "Tous";
 let periodFilters = {
   tasks: { from: "", to: "" },
   harvests: { from: "", to: "" },
@@ -218,6 +219,7 @@ const accessSections = {
     { id: "finance:summary", label: "Résumé financier" },
     { id: "finance:operations", label: "Tableau des opérations" },
     { id: "finance:byCrop", label: "Recettes et dépenses par culture" },
+    { id: "finance:userFilter", label: "Filtre par utilisateur" },
     { id: "finance:allOperations", label: "Voir toutes les opérations" },
     { id: "finance:ownOperations", label: "Voir seulement ses opérations" },
     { id: "finance:write", label: "Ajout / modification" },
@@ -1232,6 +1234,13 @@ function bindEvents() {
   document.body.addEventListener("input", handlePeriodInput);
   document.body.addEventListener("change", handlePeriodInput);
 
+  document.body.addEventListener("change", (event) => {
+    const financeUserSelect = event.target.closest("#financeUserFilter");
+    if (!financeUserSelect) return;
+    activeFinanceUserFilter = financeUserSelect.value || "Tous";
+    renderFinance();
+    applySectionAccess();
+  });
   document.querySelector("#loginForm").addEventListener("submit", handleLogin);
   window.agriPilotLoginReady = true;
   const quickTaskButton = document.querySelector("#quickTaskBtn");
@@ -1994,6 +2003,7 @@ function updatePeriodFilter(key, bound, value) {
 function resetPeriodFilter(key) {
   if (!periodFilters[key]) return;
   periodFilters[key] = { from: "", to: "" };
+  if (key === "finance") activeFinanceUserFilter = "Tous";
   document.querySelectorAll(`[data-period-key="${key}"]`).forEach((input) => { input.value = ""; });
   renderPeriodView(key);
 }
@@ -2060,7 +2070,8 @@ function renderStock() {
 }
 
 function renderFinance() {
-  const financeRecords = financeRecordsForCurrentAccess().filter((item) => dateInPeriod(item.date, "finance"));
+  renderFinanceUserFilter();
+  const financeRecords = financeRecordsForCurrentFilter().filter((item) => dateInPeriod(item.date, "finance"));
   const sortedFinanceRecords = sortRows(financeRecords, "finance", {
     date: (item) => item.date,
     label: (item) => item.label,
@@ -2106,6 +2117,28 @@ function renderFinance() {
 function financeRecordsForCurrentAccess() {
   if (canSeeAllFinanceOperations()) return state.finance;
   return state.finance.filter(recordBelongsToCurrentUser);
+}
+
+function financeRecordsForCurrentFilter() {
+  const records = financeRecordsForCurrentAccess();
+  if (!canAccessSection("finance:userFilter") || activeFinanceUserFilter === "Tous") return records;
+  return records.filter((record) => financeRecordUserLabel(record) === activeFinanceUserFilter);
+}
+
+function renderFinanceUserFilter() {
+  const select = document.querySelector("#financeUserFilter");
+  if (!select) return;
+  const labels = ["Tous", ...new Set(financeRecordsForCurrentAccess().map(financeRecordUserLabel).filter(Boolean))];
+  if (!labels.includes(activeFinanceUserFilter)) activeFinanceUserFilter = "Tous";
+  select.innerHTML = labels.map((label) => optionTag(label, activeFinanceUserFilter)).join("");
+  select.value = activeFinanceUserFilter;
+}
+
+function financeRecordUserLabel(record) {
+  const updatedBy = String(record.updatedBy || "").trim();
+  if (!updatedBy) return "Non défini";
+  const person = state.team.find((member) => [member.name, member.login, member.role, member.id].some((value) => String(value || "").trim().toLowerCase() === updatedBy.toLowerCase()));
+  return person ? person.name || person.login || updatedBy : updatedBy;
 }
 
 function canSeeAllFinanceOperations() {
@@ -2535,6 +2568,7 @@ function applySectionAccess() {
     ['[data-modal="stock"]', "stock:write"],
     ["#financeSummary", "finance:summary"],
     ["#financePeriodFilters", "finance:operations"],
+    ["#financeUserFilters", "finance:userFilter"],
     ["#financeTable", "finance:operations"],
     ["#financeByCropTable", "finance:byCrop"],
     ['#financeView [data-modal="finance"]', "finance:write"],
@@ -3018,6 +3052,12 @@ try {
 } catch (error) {
   showStartupError(error.message);
 }
+
+
+
+
+
+
 
 
 

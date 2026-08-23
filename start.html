@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=113" />
+    <link rel="manifest" href="./manifest.webmanifest?v=114" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=113" />
+    <link rel="stylesheet" href="./styles.css?v=114" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -207,6 +207,7 @@
             <button class="primary-button" data-modal="finance">Ajouter une opération</button>
           </div>
           <div class="period-filter" id="financePeriodFilters"><label>Du<input type="date" data-period-key="finance" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="finance" data-period-bound="to" /></label><button class="text-button" data-period-reset="finance">Réinitialiser</button></div>
+          <div class="period-filter finance-user-filter" id="financeUserFilters"><label>Utilisateur<select id="financeUserFilter"></select></label></div>
           <div class="finance-layout">
             <div class="panel">
               <h2>Résumé</h2>
@@ -336,7 +337,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v113";
+        var refreshKey = "agripilot-cache-refresh-v114";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -355,7 +356,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=113");
+          window.location.replace("./start.html?v=114");
         });
       })();
     </script>
@@ -380,9 +381,11 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=113" defer></script>
+    <script src="./app.js?v=114" defer></script>
   </body>
 </html>
+
+
 
 
 
