@@ -2132,7 +2132,7 @@ function renderFinance() {
       <td>${money(item.expense)}</td>
       <td><strong>${money(item.revenue - item.expense)}</strong></td>
     </tr>
-  `).join("");
+  `).join("") || `<tr><td colspan="4">Aucune recette ou dépense validée par culture sur cette période.</td></tr>`;
 }
 
 function financeRecordsForCurrentAccess() {
@@ -2516,7 +2516,7 @@ function financeByCrop(records = state.finance) {
       revenue: cropRecords.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0),
       expense: cropRecords.filter((item) => item.type === "Dépense").reduce((sum, item) => sum + Number(item.amount), 0)
     };
-  }).filter((item) => item.revenue || item.expense || item.crop !== "Non affecté");
+  }).filter((item) => item.revenue || item.expense);
 }
 
 function salesWithPrice() {
