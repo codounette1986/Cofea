@@ -2090,10 +2090,11 @@ function renderFinance() {
   const validatedFinanceRecords = financeRecords.filter(isFinanceValidated);
   const revenue = validatedFinanceRecords.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0);
   const expense = validatedFinanceRecords.filter((item) => item.type === "Dépense").reduce((sum, item) => sum + Number(item.amount), 0);
+  const personalFinanceView = !canSeeAllFinanceOperations() || activeFinanceUserFilter !== "Tous";
   document.querySelector("#financeSummary").innerHTML = [
-    ["Recettes validées", money(revenue)],
-    ["Dépenses validées", money(expense)],
-    ["Solde exploitation", money(revenue - expense)]
+    [personalFinanceView ? "Mes recettes validées" : "Recettes validées", money(revenue)],
+    [personalFinanceView ? "Mes dépenses validées" : "Dépenses validées", money(expense)],
+    [personalFinanceView ? "Solde de mes opérations" : "Solde exploitation", money(revenue - expense)]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
   renderCashSummary(financeRecords);
   setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "user", "type", "status", "amount", null], renderFinance);
@@ -2249,9 +2250,8 @@ function financeRecordAssignee(record) {
 
 function canSeeAllFinanceOperations() {
   const sections = profileSections(currentProfile());
-  const hasOwnScope = sections.includes("finance:ownOperations");
   const hasAllScope = sections.includes("finance:allOperations");
-  return currentProfile().role === "Admin" || hasAllScope || !hasOwnScope;
+  return currentProfile().role === "Admin" || hasAllScope;
 }
 
 function recordBelongsToCurrentUser(record) {
@@ -2561,6 +2561,7 @@ function profileSections(profile) {
 function canAccessSection(sectionId) {
   const profile = currentProfile();
   if (profile.role === "Admin") return true;
+  if (sectionId === "finance:cash") return profilePages(profile).includes("finance");
   return profileSections(profile).includes(sectionId);
 }
 
