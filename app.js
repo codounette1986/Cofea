@@ -2215,7 +2215,6 @@ function renderUserCashSummary(cashPanel, userPanel, records, validated, pending
     ["Avances reçues validées", money(totals.advances)],
     ["Dépenses validées", money(totals.expenses)],
     ["Retours caisse validés", money(totals.returns)],
-    ["Solde à jour", money(totals.balance)],
     ["Solde à justifier / rendre", money(accountability.balance)],
     ["Opérations en attente", `${pendingCount} (${money(pendingAmount)})`]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
