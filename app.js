@@ -1260,8 +1260,9 @@ function bindEvents() {
   });
   document.body.addEventListener("change", (event) => {
     const baseTaskCheckbox = event.target.closest("[data-base-task-check]");
-    if (!baseTaskCheckbox) return;
-    toggleBaseTaskActive(baseTaskCheckbox.dataset.baseTaskCheck, baseTaskCheckbox.checked);
+    const taskStatusCheckbox = event.target.closest("[data-task-status-check]");
+    if (baseTaskCheckbox) toggleBaseTaskActive(baseTaskCheckbox.dataset.baseTaskCheck, baseTaskCheckbox.checked);
+    if (taskStatusCheckbox) setTaskCompletion(taskStatusCheckbox.dataset.taskStatusCheck, taskStatusCheckbox.checked);
   });
   const handlePeriodInput = (event) => {
     const periodInput = event.target.closest("[data-period-key]");
@@ -1866,9 +1867,14 @@ function renderTasks() {
     due: (task) => task.due,
     status: (task) => task.status
   });
-  setupTableSort("tasks", "#tasksView thead", ["title", "field", "owner", "due", "status", null], renderTasks);
+  setupTableSort("tasks", "#tasksView thead", [null, "title", "field", "owner", "due", "status", null], renderTasks);
   document.querySelector("#tasksTable").innerHTML = tasks.map((task) => `
     <tr>
+      <td>
+        <label class="task-status-check task-status-check-compact" aria-label="Marquer la tâche comme terminée">
+          <input type="checkbox" data-task-status-check="${task.id}" ${task.status === "Terminé" ? "checked" : ""} ${canAccessSection("tasks:write") ? "" : "disabled"} />
+        </label>
+      </td>
       <td><strong>${task.title}</strong>${taskInstruction(task) ? `<span class="task-note">${taskInstruction(task)}</span>` : ""}</td>
       <td>${task.field}</td>
       <td>${task.owner}</td>
@@ -2260,7 +2266,7 @@ function cashTotals(records = []) {
   const receipts = records.filter((record) => record.type === "Recette").reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const expenses = records.filter((record) => record.type === "Dépense").reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const cashExpenses = records
-    .filter((record) => record.type === "Dépense" && !financeRecordAssignee(record))
+    .filter((record) => record.type === "Dépense" && (!financeRecordAssignee(record) || isAdminFinanceAssignee(record)))
     .reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const advances = records.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const returns = records.filter((record) => record.type === "Retour caisse").reduce((sum, record) => sum + Number(record.amount || 0), 0);
@@ -2314,6 +2320,7 @@ function userCashBalances(records) {
   records.forEach((record) => {
     const user = financeRecordUserLabel(record);
     if (!user || user === "Non assigné") return;
+    if (isAdminFinanceAssignee(record)) return;
     if (!balances.has(user)) balances.set(user, { user, records: [] });
     balances.get(user).records.push(record);
   });
@@ -2339,15 +2346,32 @@ function isFinanceFinal(record) {
 }
 
 function financeRecordUserLabel(record) {
+  const person = financeRecordAssigneePerson(record);
+  if (person) return person.name || person.login || financeRecordAssignee(record);
   const assignedTo = financeRecordAssignee(record);
   if (!assignedTo) return "Non assigné";
-  const person = state.team.find((member) => [member.name, member.login, member.role, member.id].some((value) => String(value || "").trim().toLowerCase() === assignedTo.toLowerCase()));
   return person ? person.name || person.login || assignedTo : assignedTo;
 }
 
 function financeRecordAssignee(record) {
   if (Object.prototype.hasOwnProperty.call(record, "assignedTo")) return String(record.assignedTo || "").trim();
   return String(record.updatedBy || "").trim();
+}
+
+function financeRecordAssigneePerson(record) {
+  const assignedTo = financeRecordAssignee(record);
+  if (!assignedTo) return null;
+  const normalized = assignedTo.toLowerCase();
+  return state.team.find((member) => [member.name, member.login, member.role, member.id].some((value) => String(value || "").trim().toLowerCase() === normalized)) || null;
+}
+
+function isAdminTeamMember(person) {
+  if (!person) return false;
+  return person.profileId === "admin-profile" || profileRole(person.profileId) === "Admin" || String(person.role || "").trim() === "Admin";
+}
+
+function isAdminFinanceAssignee(record) {
+  return isAdminTeamMember(financeRecordAssigneePerson(record));
 }
 
 function canSeeAllFinanceOperations() {
@@ -2919,6 +2943,15 @@ function openModal(type, id = null) {
     }
     if (typeName === "fieldSelect") {
       const fieldOptions = fieldOptionsForSelect(value);
+      if (modalType === "task" && !record) {
+        return `
+          <fieldset class="wide-field checkbox-group"><legend>${label}</legend>${fieldOptions.map((option) => `<label><input type="checkbox" name="${name}" value="${escapeHtml(option)}" />${escapeHtml(option)}</label>`).join("")}</fieldset>
+          <fieldset class="wide-field checkbox-group"><legend>Mode de création</legend>
+            <label><input type="radio" name="taskCreationMode" value="grouped" checked />Une seule tâche avec les parcelles sélectionnées</label>
+            <label><input type="radio" name="taskCreationMode" value="separate" />Une tâche séparée par parcelle</label>
+          </fieldset>
+        `;
+      }
       return `<label>${label}<select name="${name}" required>${fieldOptions.map((option) => optionTag(option, value)).join("")}</select></label>`;
     }
     if (typeName === "cropSelect") {
@@ -2951,6 +2984,19 @@ function openModal(type, id = null) {
     }
     if (typeName === "textarea") {
       return `<label class="wide-field">${label}<textarea name="${name}" rows="4" placeholder="Exemple : feuilles jaunies sur 2 lignes, arrosage renforcé, plants en bonne reprise...">${safeValue}</textarea></label>`;
+    }
+    if (modalType === "task" && !record && name === "due") {
+      return `
+        <fieldset class="wide-field checkbox-group"><legend>Échéances</legend>
+          <label>Date 1<input name="${name}" type="date" required /></label>
+          <label>Date 2<input name="${name}" type="date" /></label>
+          <label>Date 3<input name="${name}" type="date" /></label>
+          <label>Date 4<input name="${name}" type="date" /></label>
+          <label>Date 5<input name="${name}" type="date" /></label>
+          <label>Date 6<input name="${name}" type="date" /></label>
+          <label>Date 7<input name="${name}" type="date" /></label>
+        </fieldset>
+      `;
     }
     if (typeName === "checkbox") {
       const checked = name === "active" ? !record || record.active !== false : Boolean(value);
@@ -3111,7 +3157,27 @@ function handleFormSubmit(event) {
     data.active = Boolean(event.currentTarget.elements.active && event.currentTarget.elements.active.checked);
     data.area = Math.max(0, Math.min(3, Number(data.area || 0)));
   }
-  if (modalType === "task") data.status = taskStatus(data);
+  let selectedTaskFields = [];
+  let selectedTaskDates = [];
+  let separateTaskByField = false;
+  if (modalType === "task") {
+    const formData = new FormData(event.currentTarget);
+    selectedTaskFields = formData.getAll("field").filter(Boolean);
+    selectedTaskDates = [...new Set(formData.getAll("due").filter(Boolean))];
+    separateTaskByField = formData.get("taskCreationMode") === "separate";
+    if (!editingRecord && !selectedTaskFields.length) {
+      window.alert("Sélectionnez au moins une parcelle pour créer la tâche.");
+      return;
+    }
+    if (!editingRecord && !selectedTaskDates.length) {
+      window.alert("Sélectionnez au moins une date pour créer la tâche.");
+      return;
+    }
+    data.field = editingRecord ? data.field : separateTaskByField ? selectedTaskFields[0] : selectedTaskFields.join(", ");
+    data.due = editingRecord ? data.due : selectedTaskDates[0];
+    delete data.taskCreationMode;
+    data.status = taskStatus(data);
+  }
   if (data.health) data.health = Number.parseInt(data.health, 10);
   if (modalType === "finance") {
     if (!canValidateFinance() && !["Recette", "Dépense", "Retour caisse"].includes(data.type)) data.type = "Dépense";
@@ -3146,6 +3212,15 @@ function handleFormSubmit(event) {
     state[config.collection] = state[config.collection].map((item) =>
       item.id === editingRecord.id ? touchRecord({ ...item, ...data }, timestamp) : item
     );
+  } else if (modalType === "task" && (selectedTaskDates.length > 1 || (separateTaskByField && selectedTaskFields.length > 1))) {
+    const timestamp = new Date().toISOString();
+    const fieldGroups = separateTaskByField ? selectedTaskFields : [selectedTaskFields.join(", ")];
+    selectedTaskDates.forEach((due) => {
+      fieldGroups.forEach((fieldName) => {
+        const taskData = { ...data, field: fieldName, due };
+        state[config.collection].unshift(touchRecord({ id: createId(), ...taskData, status: taskStatus(taskData) }, timestamp));
+      });
+    });
   } else {
     state[config.collection].unshift(touchRecord({ id: savedRecordId, ...data }));
   }
@@ -3290,7 +3365,20 @@ function deleteRecord(collection, id) {
 
 function completeTask(id) {
   if (!canAccessSection("tasks:write")) return;
-  state.tasks = state.tasks.map((task) => task.id === id ? touchRecord({ ...task, status: "Terminé" }) : task);
+  setTaskCompletion(id, true);
+}
+
+function setTaskCompletion(id, done) {
+  if (!canAccessSection("tasks:write")) return;
+  state.tasks = state.tasks.map((task) => {
+    if (task.id !== id) return task;
+    if (done) {
+      const previousStatus = task.status && task.status !== "Terminé" ? task.status : task.previousStatus || "À faire";
+      return touchRecord({ ...task, previousStatus, status: "Terminé" });
+    }
+    const restoredStatus = task.previousStatus && task.previousStatus !== "Terminé" ? task.previousStatus : "À faire";
+    return touchRecord({ ...task, previousStatus: "", status: restoredStatus });
+  });
   saveState();
   render();
 }
