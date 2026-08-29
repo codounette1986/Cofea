@@ -112,6 +112,8 @@ let modalAccessType = "task";
 let editingRecord = null;
 let activeProfileId = localStorage.getItem(activeProfileKey) || "admin-profile";
 let activeUserId = sessionStorage.getItem(authUserKey) || "";
+let dialogSnapshots = {};
+let dialogDirty = {};
 let syncTimer = null;
 let autoSyncTimer = null;
 let syncInProgress = false;
@@ -1287,8 +1289,12 @@ function bindEvents() {
   if (quickTaskButton) quickTaskButton.addEventListener("click", () => openModal("task"));
   document.querySelector("#logoutBtn").addEventListener("click", logout);
   document.querySelector("#recordForm").addEventListener("submit", handleFormSubmit);
+  document.querySelector("#recordForm").addEventListener("input", () => markDialogDirty("recordModal"));
+  document.querySelector("#recordForm").addEventListener("change", () => markDialogDirty("recordModal"));
   document.querySelector("#changePasswordBtn").addEventListener("click", openPasswordModal);
   document.querySelector("#passwordForm").addEventListener("submit", handlePasswordSubmit);
+  document.querySelector("#passwordForm").addEventListener("input", () => markDialogDirty("passwordModal"));
+  document.querySelector("#passwordForm").addEventListener("change", () => markDialogDirty("passwordModal"));
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     const closeHandler = (event) => {
       event.preventDefault();
@@ -1303,6 +1309,10 @@ function bindEvents() {
     if (dialog) {
       dialog.addEventListener("click", (event) => {
         if (event.target === dialog) closeDialog(dialogId);
+      });
+      dialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        closeDialog(dialogId);
       });
     }
   });
@@ -1321,9 +1331,12 @@ function bindEvents() {
   });
 }
 
-function closeDialog(dialogId) {
+function closeDialog(dialogId, options = {}) {
   const dialog = document.querySelector(`#${dialogId}`);
   if (dialog) {
+    if (!options.force && dialogHasUnsavedChanges(dialogId) && !window.confirm("Vous avez une saisie en cours. Voulez-vous quitter le formulaire sans enregistrer ?")) {
+      return;
+    }
     try {
       if (dialog.open && dialog.close) dialog.close();
     } catch (error) {
@@ -1332,8 +1345,41 @@ function closeDialog(dialogId) {
     if (dialog.open) dialog.removeAttribute("open");
     const form = dialog.querySelector("form");
     if (form) form.reset();
+    delete dialogSnapshots[dialogId];
+    delete dialogDirty[dialogId];
   }
   if (dialogId === "recordModal") editingRecord = null;
+}
+
+function markDialogDirty(dialogId) {
+  dialogDirty[dialogId] = true;
+}
+
+function rememberDialogSnapshot(dialogId) {
+  const dialog = document.querySelector(`#${dialogId}`);
+  const form = dialog ? dialog.querySelector("form") : null;
+  dialogSnapshots[dialogId] = form ? serializeForm(form) : "";
+}
+
+function dialogHasUnsavedChanges(dialogId) {
+  const dialog = document.querySelector(`#${dialogId}`);
+  if (!dialog || !dialog.open) return false;
+  const form = dialog.querySelector("form");
+  if (!form) return false;
+  return Boolean(dialogDirty[dialogId]) || serializeForm(form) !== (dialogSnapshots[dialogId] || "");
+}
+
+function serializeForm(form) {
+  const entries = [];
+  Array.from(form.elements).forEach((field) => {
+    if (!field.name || field.disabled || field.type === "submit" || field.type === "button") return;
+    if ((field.type === "checkbox" || field.type === "radio") && !field.checked) {
+      entries.push([field.name, ""]);
+      return;
+    }
+    entries.push([field.name, field.value || ""]);
+  });
+  return JSON.stringify(entries);
 }
 
 
@@ -3119,6 +3165,7 @@ function openModal(type, id = null) {
   }
   if (modalType === "profile") bindProfileAccessFields();
   document.querySelector("#recordModal").showModal();
+  rememberDialogSnapshot("recordModal");
 }
 
 function renderSectionAccessChoices(pages, selectedSections, label = "Sous-sections autorisées") {
@@ -3329,7 +3376,7 @@ function handleFormSubmit(event) {
   saveState();
   editingRecord = null;
   event.currentTarget.reset();
-  document.querySelector("#recordModal").close();
+  closeDialog("recordModal", { force: true });
   render();
 }
 
@@ -3348,6 +3395,7 @@ function openPasswordModal() {
   message.textContent = "";
   message.className = "wide-field password-message";
   document.querySelector("#passwordModal").showModal();
+  rememberDialogSnapshot("passwordModal");
 }
 
 function togglePasswordVisibility(button) {
@@ -3432,7 +3480,7 @@ async function handlePasswordSubmit(event) {
   }
   window.setTimeout(() => {
     form.reset();
-    document.querySelector("#passwordModal").close();
+    closeDialog("passwordModal", { force: true });
     logout();
   }, 800);
 }
