@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=143" />
+    <link rel="manifest" href="./manifest.webmanifest?v=144" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=143" />
+    <link rel="stylesheet" href="./styles.css?v=144" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -120,7 +120,7 @@
         <section class="view" id="fieldsView">
           <div class="section-head">
             <h2>Parcelles et cultures</h2>
-            <button class="primary-button" data-modal="field">Ajouter une parcelle</button>
+            <div class="section-actions"><button class="text-button" data-export="fields">Exporter Excel</button><button class="primary-button" data-modal="field">Ajouter une parcelle</button></div>
           </div>
           <div class="record-grid" id="fieldsGrid"></div>
         </section>
@@ -128,7 +128,7 @@
         <section class="view" id="cropsView">
           <div class="section-head">
             <h2>Base des cultures</h2>
-            <button class="primary-button" data-modal="crop">Ajouter une culture</button>
+            <div class="section-actions"><button class="text-button" data-export="crops">Exporter Excel</button><button class="primary-button" data-modal="crop">Ajouter une culture</button></div>
           </div>
           <div class="record-grid" id="cropsGrid"></div>
         </section>
@@ -136,6 +136,7 @@
         <section class="view" id="tasksView">
           <div class="section-head">
             <h2>Planning des travaux</h2>
+            <div class="section-actions"><button class="text-button" data-export="tasks">Exporter Excel</button></div>
           </div>
           <div class="panel daily-task-panel">
             <div class="panel-head">
@@ -167,7 +168,7 @@
         <section class="view" id="harvestsView">
           <div class="section-head">
             <h2>Récoltes par parcelle</h2>
-            <button class="primary-button" data-modal="harvest">Ajouter une récolte</button>
+            <div class="section-actions"><button class="text-button" data-export="harvests">Exporter Excel</button><button class="primary-button" data-modal="harvest">Ajouter une récolte</button></div>
           </div>
           <div class="period-filter" id="harvestPeriodFilters"><label>Du<input type="date" data-period-key="harvests" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="harvests" data-period-bound="to" /></label><button class="text-button" data-period-reset="harvests">Réinitialiser</button></div>
           <div class="harvest-layout">
@@ -197,7 +198,7 @@
         <section class="view" id="stockView">
           <div class="section-head">
             <h2>Stock et intrants</h2>
-            <button class="primary-button" data-modal="stock">Ajouter un stock</button>
+            <div class="section-actions"><button class="text-button" data-export="stock">Exporter Excel</button><button class="primary-button" data-modal="stock">Ajouter un stock</button></div>
           </div>
           <div class="record-grid" id="stockGrid"></div>
         </section>
@@ -205,7 +206,7 @@
         <section class="view" id="financeView">
           <div class="section-head">
             <h2>Finances</h2>
-            <button class="primary-button" data-modal="finance">Ajouter une opération</button>
+            <div class="section-actions"><button class="text-button" data-export="finance">Exporter Excel</button><button class="primary-button" data-modal="finance">Ajouter une opération</button></div>
           </div>
           <div class="period-filter" id="financePeriodFilters"><label>Du<input type="date" data-period-key="finance" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="finance" data-period-bound="to" /></label><button class="text-button" data-period-reset="finance">Réinitialiser</button></div>
           <div class="period-filter finance-user-filter" id="financeUserFilters"><label>Utilisateur<select id="financeUserFilter"></select></label></div>
@@ -261,7 +262,7 @@
         <section class="view" id="pricesView">
           <div class="section-head">
             <h2>Prix de vente des cultures</h2>
-            <button class="primary-button" data-modal="sale">Ajouter une vente</button>
+            <div class="section-actions"><button class="text-button" data-export="prices">Exporter Excel</button><button class="primary-button" data-modal="sale">Ajouter une vente</button></div>
           </div>
           <div class="period-filter" id="pricePeriodFilters"><label>Du<input type="date" data-period-key="prices" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="prices" data-period-bound="to" /></label><button class="text-button" data-period-reset="prices">Réinitialiser</button></div>
           <div class="price-layout">
@@ -296,7 +297,7 @@
         <section class="view" id="profilesView">
           <div class="section-head">
             <h2>Profils d'accès</h2>
-            <button class="primary-button" data-modal="profile">Ajouter un profil</button>
+            <div class="section-actions"><button class="text-button" data-export="profiles">Exporter Excel</button><button class="primary-button" data-modal="profile">Ajouter un profil</button></div>
           </div>
           <div class="record-grid" id="profilesGrid"></div>
         </section>
@@ -304,7 +305,7 @@
         <section class="view" id="teamView">
           <div class="section-head">
             <h2>Équipe et responsabilités</h2>
-            <button class="primary-button" data-modal="team">Ajouter une personne</button>
+            <div class="section-actions"><button class="text-button" data-export="team">Exporter Excel</button><button class="primary-button" data-modal="team">Ajouter une personne</button></div>
           </div>
           <div class="record-grid" id="teamGrid"></div>
         </section>
@@ -348,7 +349,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v143";
+        var refreshKey = "agripilot-cache-refresh-v144";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -367,7 +368,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=143");
+          window.location.replace("./start.html?v=144");
         });
       })();
     </script>
@@ -392,7 +393,7 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=143" defer></script>
+    <script src="./app.js?v=144" defer></script>
   </body>
 </html>
 

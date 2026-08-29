@@ -152,7 +152,7 @@ body:not(.authenticated) .app-shell { display: none; }
 
 .main { padding: 28px; }
 .topbar, .section-head, .panel-head, .section-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.section-actions { justify-content: flex-end; flex-wrap: wrap; }
+.section-actions { justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
 .topbar { margin-bottom: 24px; }
 .top-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 

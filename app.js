@@ -1245,6 +1245,7 @@ function bindEvents() {
     const periodResetButton = event.target.closest("[data-period-reset]");
     const closeDialogButton = event.target.closest("[data-close-dialog]");
     const passwordToggleButton = event.target.closest("[data-toggle-password]");
+    const exportButton = event.target.closest("[data-export]");
 
     if (event.target.closest(".daily-task-actions")) event.preventDefault();
     if (closeDialogButton) closeDialog(closeDialogButton.dataset.closeDialog);
@@ -1257,6 +1258,7 @@ function bindEvents() {
     if (toggleFieldButton) toggleField(toggleFieldButton.dataset.toggleField);
     if (toggleCropButton) toggleCrop(toggleCropButton.dataset.toggleCrop);
     if (periodResetButton) resetPeriodFilter(periodResetButton.dataset.periodReset);
+    if (exportButton) exportView(exportButton.dataset.export);
   });
   document.body.addEventListener("change", (event) => {
     const baseTaskCheckbox = event.target.closest("[data-base-task-check]");
@@ -2054,6 +2056,102 @@ function resetPeriodFilter(key) {
   if (key === "finance") activeFinanceUserFilter = "Tous";
   document.querySelectorAll(`[data-period-key="${key}"]`).forEach((input) => { input.value = ""; });
   renderPeriodView(key);
+}
+
+function exportView(view) {
+  const exportConfig = exportRowsForView(view);
+  if (!exportConfig || !exportConfig.rows.length) {
+    window.alert("Aucune donnée à exporter pour cette page.");
+    return;
+  }
+  downloadCsv(exportConfig.filename, exportConfig.headers, exportConfig.rows);
+}
+
+function exportRowsForView(view) {
+  const today = currentDateValue();
+  if (view === "fields") {
+    return {
+      filename: `parcelles-${today}.csv`,
+      headers: ["Nom", "Culture", "Surface", "Mode", "Stade", "Santé", "Statut", "Mise à jour"],
+      rows: state.fields.map((field) => [field.name, field.crop, formatArea(field.area), field.mode || "Plein champ", field.stage, `${field.health || 0}%`, isFieldActive(field) ? "Active" : "Inactive", field.update || ""])
+    };
+  }
+  if (view === "crops") {
+    return {
+      filename: `cultures-${today}.csv`,
+      headers: ["Culture", "Statut", "Famille", "Cycle", "Besoin en eau", "Espacement", "Notes"],
+      rows: state.crops.map((crop) => [crop.name, crop.active === false ? "Inactive" : "Active", crop.family || "", crop.cycle || "", crop.water || "", crop.spacing || "", crop.notes || ""])
+    };
+  }
+  if (view === "tasks") {
+    const rows = state.tasks
+      .filter((task) => dateInPeriod(task.due, "tasks"))
+      .filter((task) => activeTaskFilter === "Tous" || task.status === activeTaskFilter)
+      .map((task) => [task.title, task.field, task.owner, task.due, task.status, taskInstruction(task) || ""]);
+    return { filename: `travaux-${today}.csv`, headers: ["Travail", "Parcelle", "Responsable", "Échéance", "Statut", "Consigne"], rows };
+  }
+  if (view === "harvests") {
+    const rows = state.harvests
+      .filter((harvest) => dateInPeriod(harvest.date, "harvests"))
+      .map((harvest) => [harvest.date, harvest.field, harvest.crop, harvest.quantity, harvest.unit, harvest.quality, harvest.destination]);
+    return { filename: `recoltes-${today}.csv`, headers: ["Date", "Parcelle", "Culture", "Quantité", "Unité", "Qualité", "Destination"], rows };
+  }
+  if (view === "stock") {
+    return {
+      filename: `stock-${today}.csv`,
+      headers: ["Article", "Catégorie", "Quantité", "Unité", "Seuil"],
+      rows: state.stock.map((stock) => [stock.item, stock.category, stock.quantity, stock.unit, stock.threshold])
+    };
+  }
+  if (view === "finance") {
+    const rows = financeRecordsForCurrentFilter()
+      .filter((item) => dateInPeriod(item.date, "finance"))
+      .map((item) => [item.date, item.label, item.crop || "Non affecté", financeRecordUserLabel(item), item.type, financeStatus(item), Number(item.amount || 0), item.isSale ? "Oui" : "Non", item.saleQuantity || "", item.saleUnit || "", item.salePrice || ""]);
+    return { filename: `finance-${today}.csv`, headers: ["Date", "Libellé", "Culture", "Utilisateur", "Type", "Statut", "Montant", "Vente", "Quantité vendue", "Unité", "Prix unitaire"], rows };
+  }
+  if (view === "prices") {
+    const sales = salesWithPrice().filter((sale) => dateInPeriod(sale.date, "prices")).filter((sale) => activePriceCrop === "Toutes" || sale.crop === activePriceCrop);
+    return {
+      filename: `prix-vente-${today}.csv`,
+      headers: ["Date", "Culture", "Vente", "Quantité", "Unité", "Prix unitaire", "Prix par kg"],
+      rows: sales.map((sale) => [sale.date, sale.crop, Number(sale.amount || 0), sale.saleQuantity, sale.saleUnit, sale.salePrice || sale.unitPrice, sale.pricePerKg])
+    };
+  }
+  if (view === "profiles") {
+    return {
+      filename: `profils-${today}.csv`,
+      headers: ["Nom", "Rôle", "Pages", "Sous-sections", "Note"],
+      rows: state.profiles.map((profile) => [profile.name, profile.role, profilePages(profile).map(pageLabel).join(", "), profileSections(profile).join(", "), profile.note || ""])
+    };
+  }
+  if (view === "team") {
+    return {
+      filename: `equipe-${today}.csv`,
+      headers: canManageProfiles() ? ["Nom", "Rôle", "Téléphone", "Profil", "Identifiant"] : ["Nom", "Rôle", "Téléphone"],
+      rows: state.team.map((rawPerson) => {
+        const person = teamRecordWithAccount(rawPerson);
+        return canManageProfiles() ? [person.name, person.role, person.phone, profileName(person.profileId), person.login || ""] : [person.name, person.role, person.phone];
+      })
+    };
+  }
+  return null;
+}
+
+function downloadCsv(filename, headers, rows) {
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(";")).join("\r\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function csvCell(value) {
+  const text = String(value ?? "").replaceAll('"', '""');
+  return /[;"\r\n]/.test(text) ? `"${text}"` : text;
 }
 
 function renderPeriodView(key) {
