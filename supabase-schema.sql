@@ -103,6 +103,21 @@ create table if not exists public.stock (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.clients (
+  id text primary key,
+  name text,
+  contact text,
+  phone text,
+  location text,
+  type text,
+  crops jsonb,
+  notes text,
+  updated_by text,
+  deleted_at timestamptz,
+  deleted_by text,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.finance (
   id text primary key,
   date date,
@@ -159,6 +174,7 @@ begin
     'harvests',
     'crops',
     'stock',
+    'clients',
     'finance',
     'team',
     'user_accounts'
@@ -222,6 +238,14 @@ alter table public.stock add column if not exists quantity numeric(12, 3);
 alter table public.stock add column if not exists unit text;
 alter table public.stock add column if not exists threshold numeric(12, 3);
 
+alter table public.clients add column if not exists name text;
+alter table public.clients add column if not exists contact text;
+alter table public.clients add column if not exists phone text;
+alter table public.clients add column if not exists location text;
+alter table public.clients add column if not exists type text;
+alter table public.clients add column if not exists crops jsonb;
+alter table public.clients add column if not exists notes text;
+
 alter table public.finance add column if not exists date date;
 alter table public.finance add column if not exists label text;
 alter table public.finance add column if not exists crop text;
@@ -258,6 +282,7 @@ begin
     'harvests',
     'crops',
     'stock',
+    'clients',
     'finance',
     'team',
     'user_accounts'

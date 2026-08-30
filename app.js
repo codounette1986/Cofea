@@ -19,6 +19,7 @@ const supabaseConfig = {
     harvests: "harvests",
     crops: "crops",
     stock: "stock",
+    clients: "clients",
     finance: "finance",
     team: "team",
     userAccounts: "user_accounts"
@@ -73,6 +74,7 @@ const starterState = {
   harvests: [],
   crops: [],
   stock: [],
+  clients: [],
   finance: [],
   team: [
     { id: "admin-user", name: "Administrateur", role: "Admin", phone: "", profileId: "admin-profile", login: "admin", password: "admin123" }
@@ -161,6 +163,7 @@ const navItems = [
   ["tasks", "Travaux", "tasks"],
   ["harvests", "Récoltes", "harvests"],
   ["stock", "Stock", "stock"],
+  ["clients", "Clients", "clients"],
   ["finance", "Finances", "finance"],
   ["prices", "Prix vente", "prices"],
   ["profiles", "Profils", "profiles"],
@@ -174,8 +177,8 @@ const accessPages = navItems
 const defaultPagesByRole = {
   Admin: accessPages.map((page) => page.id).concat("profiles"),
   Comptable: ["dashboard", "finance", "prices"],
-  "Chef exploitation": ["dashboard", "fields", "crops", "tasks", "harvests", "stock", "team"],
-  Commercial: ["dashboard", "fields", "crops", "harvests", "stock", "prices", "team"],
+  "Chef exploitation": ["dashboard", "fields", "crops", "tasks", "harvests", "stock", "clients", "team"],
+  Commercial: ["dashboard", "fields", "crops", "harvests", "stock", "clients", "prices", "team"],
   Terrain: ["dashboard", "fields", "tasks", "harvests", "stock", "team"]
 };
 
@@ -217,6 +220,11 @@ const accessSections = {
     { id: "stock:list", label: "Inventaire" },
     { id: "stock:write", label: "Ajout / modification" },
     { id: "stock:delete", label: "Suppression" }
+  ],
+  clients: [
+    { id: "clients:list", label: "Base clients" },
+    { id: "clients:write", label: "Ajout / modification" },
+    { id: "clients:delete", label: "Suppression" }
   ],
   finance: [
     { id: "finance:summary", label: "Résumé financier" },
@@ -329,6 +337,19 @@ const modalConfig = {
       ["threshold", "Seuil d'alerte", "number"]
     ]
   },
+  client: {
+    title: "Ajouter un client",
+    collection: "clients",
+    fields: [
+      ["name", "Nom du client", "text"],
+      ["contact", "Personne contact", "text"],
+      ["phone", "Téléphone", "tel"],
+      ["location", "Localisation", "text"],
+      ["type", "Type de client", "select", ["Grossiste", "Détaillant", "Restaurant", "Marché", "Particulier", "Autre"]],
+      ["crops", "Cultures intéressées", "cropCheckboxes"],
+      ["notes", "Notes commerciales", "textarea"]
+    ]
+  },
   finance: {
     title: "Ajouter une opération",
     collection: "finance",
@@ -385,6 +406,7 @@ function loadState() {
     harvests: arrayOrEmpty(parsed.harvests),
     crops: arrayOrEmpty(parsed.crops),
     stock: arrayOrEmpty(parsed.stock),
+    clients: arrayOrEmpty(parsed.clients),
     finance: arrayOrEmpty(parsed.finance),
     team: ensureAdminAccess(mergeDefaultTeam(localTeam)),
     userAccounts: localAccounts,
@@ -402,6 +424,7 @@ function createInitialState() {
     harvests: [],
     crops: starterState.crops,
     stock: [],
+    clients: [],
     finance: [],
     team: starterState.team,
     userAccounts: userAccountsFromTeam(starterState.team),
@@ -508,7 +531,7 @@ function matchesStarterExample(item, key) {
 
 function withoutStarterExamples(data = {}) {
   const clean = { ...data };
-  ["fields", "tasks", "harvests", "stock", "finance"].forEach((key) => {
+  ["fields", "tasks", "harvests", "stock", "clients", "finance"].forEach((key) => {
     clean[key] = arrayOrEmpty(clean[key]).filter((item) => !item.deletedAt && !matchesStarterExample(item, key));
   });
   ["profiles", "crops", "dailyTaskTemplates", "team", "userAccounts"].forEach((key) => {
@@ -532,7 +555,18 @@ function mergeDefaultProfiles(profiles = []) {
   const missingDefaults = starterState.profiles.filter((profile) =>
     !existing.some((item) => item.id === profile.id || item.role === profile.role)
   );
-  return [...existing, ...missingDefaults];
+  return [...existing, ...missingDefaults].map(ensureClientAccessForCommercial);
+}
+
+function ensureClientAccessForCommercial(profile) {
+  if (!profile || profile.role !== "Commercial") return profile;
+  const pages = Array.isArray(profile.pages) && profile.pages.length ? profile.pages : defaultPagesByRole.Commercial;
+  const sections = Array.isArray(profile.sections) ? profile.sections : allSectionsForPages(pages);
+  return {
+    ...profile,
+    pages: pages.includes("clients") ? pages : [...pages, "clients"],
+    sections: accessSections.clients.every((section) => sections.includes(section.id)) ? sections : [...sections, ...accessSections.clients.map((section) => section.id)]
+  };
 }
 function mergeDefaultTeam(team = []) {
   const existing = team.length ? team : [];
@@ -765,6 +799,15 @@ const remoteColumnMap = {
     unit: "unit",
     threshold: "threshold"
   },
+  clients: {
+    name: "name",
+    contact: "contact",
+    phone: "phone",
+    location: "location",
+    type: "type",
+    crops: "crops",
+    notes: "notes"
+  },
   finance: {
     date: "date",
     label: "label",
@@ -893,6 +936,7 @@ function normalizeLoadedState(data) {
     harvests: arrayOrEmpty(data.harvests),
     crops: arrayOrEmpty(data.crops),
     stock: arrayOrEmpty(data.stock),
+    clients: arrayOrEmpty(data.clients),
     finance: arrayOrEmpty(data.finance),
     team: ensureAdminAccess(mergeDefaultTeam(remoteTeam)),
     userAccounts: mergedAccounts,
@@ -1227,6 +1271,7 @@ function navIcon(name) {
     tasks: '<path d="m5 12 4 4L19 6" /><path d="M5 20h14" />',
     harvests: '<path d="M6 7h12l-1 13H7L6 7Z" /><path d="M9 7a3 3 0 0 1 6 0" /><path d="M9 12h6M10 16h4" />',
     stock: '<path d="M4 8 12 4l8 4-8 4-8-4Z" /><path d="M4 8v8l8 4 8-4V8" /><path d="M12 12v8" />',
+    clients: '<path d="M5 5h14v14H5V5Z" /><path d="M8 9h8M8 13h8M8 17h5" /><path d="M16 3v4M8 3v4" />',
     finance: '<path d="M7 7h10M7 12h10M7 17h6" /><path d="M16 15c0 2 3 2 3 0s-3-2-3-4 3-2 3 0" />',
     prices: '<path d="M4 18h16" /><path d="m6 15 4-4 3 3 5-7" /><path d="M16 7h2v2" />',
     profiles: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path d="M4 20a8 8 0 0 1 16 0" />',
@@ -1532,6 +1577,7 @@ function render() {
   renderTasks();
   renderHarvests();
   renderStock();
+  renderClients();
   renderFinance();
   renderPrices();
   renderProfiles();
@@ -2149,6 +2195,13 @@ function exportRowsForView(view) {
       rows: state.stock.map((stock) => [stock.item, stock.category, stock.quantity, stock.unit, stock.threshold])
     };
   }
+  if (view === "clients") {
+    return {
+      filename: `clients-${today}.csv`,
+      headers: ["Client", "Contact", "Téléphone", "Localisation", "Type", "Cultures intéressées", "Notes"],
+      rows: state.clients.map((client) => [client.name, client.contact || "", client.phone || "", client.location || "", client.type || "", Array.isArray(client.crops) ? client.crops.join(", ") : "", client.notes || ""])
+    };
+  }
   if (view === "finance") {
     const rows = financeRecordsForCurrentFilter()
       .filter((item) => dateInPeriod(item.date, "finance"))
@@ -2259,6 +2312,29 @@ function renderStock() {
       </div>
     </article>
   `).join("");
+}
+
+function renderClients() {
+  const grid = document.querySelector("#clientsGrid");
+  if (!grid) return;
+  grid.innerHTML = state.clients.map((client) => `
+    <article class="record-card">
+      <strong>${client.name}</strong>
+      <span class="muted">${client.type || "Type non renseigné"} · ${client.location || "Localisation non renseignée"}</span>
+      <div class="record-meta">
+        <span class="pill">${client.contact || "Contact à préciser"}</span>
+        <span class="pill">${client.phone || "Téléphone à préciser"}</span>
+      </div>
+      <div class="crop-details">
+        <span><strong>Cultures</strong>${Array.isArray(client.crops) && client.crops.length ? client.crops.join(", ") : "À préciser"}</span>
+        <span><strong>Notes</strong>${client.notes || "Aucune note commerciale."}</span>
+      </div>
+      <div class="card-actions">
+        <button data-edit="${client.id}" data-type="client">Modifier</button>
+        <button data-delete="${client.id}" data-collection="clients">Supprimer</button>
+      </div>
+    </article>
+  `).join("") || `<p class="muted">Aucun client enregistré.</p>`;
 }
 
 function renderFinance() {
@@ -2902,6 +2978,7 @@ const modalWriteSections = {
   baseTask: "tasks:write",
   harvest: "harvests:write",
   stock: "stock:write",
+  client: "clients:write",
   finance: "finance:write",
   sale: "prices:write",
   team: "team:write",
@@ -2915,6 +2992,7 @@ const collectionDeleteSections = {
   dailyTaskTemplates: "tasks:delete",
   harvests: "harvests:delete",
   stock: "stock:delete",
+  clients: "clients:delete",
   finance: "finance:delete",
   team: "team:delete",
   profiles: "profiles:delete"
@@ -2977,6 +3055,9 @@ function applySectionAccess() {
     ['[data-modal="harvest"]', "harvests:write"],
     ["#stockGrid", "stock:list"],
     ['[data-modal="stock"]', "stock:write"],
+    ["#clientsGrid", "clients:list"],
+    ['#clientsView [data-export="clients"]', "clients:list"],
+    ['[data-modal="client"]', "clients:write"],
     ["#financeSummary", "finance:summary"],
     ["#financeCashPanel", "finance:cash"],
     ["#financeUserBalancePanel", "finance:cash"],
@@ -3007,6 +3088,8 @@ function applySectionAccess() {
     ['[data-delete][data-collection="harvests"]', "harvests:delete"],
     ['[data-edit][data-type="stock"]', "stock:write"],
     ['[data-delete][data-collection="stock"]', "stock:delete"],
+    ['[data-edit][data-type="client"]', "clients:write"],
+    ['[data-delete][data-collection="clients"]', "clients:delete"],
     ['[data-edit][data-type="finance"]', "finance:write"],
     ['[data-delete][data-collection="finance"]', "finance:delete"],
     ['[data-edit][data-type="team"]', "team:write"],
@@ -3284,6 +3367,9 @@ function handleFormSubmit(event) {
     const formData = new FormData(event.currentTarget);
     data.crops = formData.getAll("crops");
     data.modes = formData.getAll("modes");
+  }
+  if (modalType === "client") {
+    data.crops = new FormData(event.currentTarget).getAll("crops");
   }
   if (modalType === "team" && !canManageProfiles()) {
     delete data.profileId;
