@@ -2244,7 +2244,7 @@ function exportRowsForView(view) {
   if (view === "finance") {
     const rows = financeRecordsForCurrentFilter()
       .filter((item) => dateInPeriod(item.date, "finance"))
-      .map((item) => [item.date, item.label, item.crop || "Non affecté", financeRecordUserLabel(item), financeAccount(item), item.transferTo || "", item.type, financeStatus(item), Number(item.amount || 0), isCcaMovement(item) ? "Oui" : "Non", item.ccaOwner || "", item.isSale ? "Oui" : "Non", item.saleQuantity || "", item.saleUnit || "", item.salePrice || ""]);
+      .map((item) => [item.date, item.label, financeCropLabel(item), financeRecordUserLabel(item), financeAccount(item), item.transferTo || "", item.type, financeStatus(item), Number(item.amount || 0), isCcaMovement(item) ? "Oui" : "Non", item.ccaOwner || "", item.isSale ? "Oui" : "Non", item.saleQuantity || "", item.saleUnit || "", item.salePrice || ""]);
     return { filename: `finance-${today}.csv`, headers: ["Date", "Libellé", "Culture", "Utilisateur", "Compte", "Vers", "Type", "Statut", "Montant", "CCA", "Associé CCA", "Vente", "Quantité vendue", "Unité", "Prix unitaire"], rows };
   }
   if (view === "prices") {
@@ -2382,7 +2382,7 @@ function renderFinance() {
   const sortedFinanceRecords = sortRows(financeRecords, "finance", {
     date: (item) => item.date,
     label: (item) => item.label,
-    crop: (item) => item.crop || "Non affecté",
+    crop: (item) => financeCropLabel(item),
     user: (item) => financeRecordUserLabel(item),
     account: (item) => financeAccount(item),
     transferTo: (item) => item.transferTo || "",
@@ -2423,7 +2423,7 @@ function renderFinance() {
     <tr>
       <td>${item.date}</td>
       <td>${item.label}</td>
-      <td>${item.crop || "Non affecté"}</td>
+      <td>${financeCropLabel(item)}</td>
       <td>${financeRecordUserLabel(item)}</td>
       <td>${financeAccount(item)}</td>
       <td>${item.transferTo || ""}</td>
@@ -2622,6 +2622,12 @@ function cashTotals(records = []) {
 
 function financeAccount(record) {
   return record && record.account === "Banque" ? "Banque" : "Caisse";
+}
+
+function financeCropLabel(record) {
+  const crop = record && record.crop ? record.crop : "";
+  if (record && record.type === "Dépense" && (!crop || crop === "Non affecté")) return "Exploitation";
+  return crop || "Non affecté";
 }
 
 function isCcaExpense(record) {
@@ -2927,9 +2933,9 @@ function fieldOptionsForSelect(currentValue = "") {
 }
 
 function financeByCrop(records = state.finance) {
-  const cropNames = [...new Set([...state.crops.map((crop) => crop.name), ...records.map((item) => item.crop || "Non affecté")])];
+  const cropNames = [...new Set([...state.crops.map((crop) => crop.name), ...records.map(financeCropLabel)])];
   return cropNames.map((crop) => {
-    const cropRecords = records.filter((item) => (item.crop || "Non affecté") === crop);
+    const cropRecords = records.filter((item) => financeCropLabel(item) === crop);
     return {
       crop,
       revenue: cropRecords.filter((item) => item.type === "Recette").reduce((sum, item) => sum + Number(item.amount), 0),
@@ -2940,7 +2946,7 @@ function financeByCrop(records = state.finance) {
 
 function salesWithPrice() {
   return state.finance
-    .filter((item) => item.type === "Recette" && item.isSale && item.crop && item.crop !== "Non affecté" && Number(item.saleQuantity) > 0)
+    .filter((item) => item.type === "Recette" && item.isSale && item.crop && !["Non affecté", "Exploitation"].includes(item.crop) && Number(item.saleQuantity) > 0)
     .map((item) => ({
       ...item,
       kgQuantity: saleKgQuantity(item),
@@ -3321,7 +3327,7 @@ function openModal(type, id = null) {
       return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option, value)).join("")}</select></label>`;
     }
     if (typeName === "cropSelectOptional") {
-      const options = ["Non affecté", ...cropOptions(value)];
+      const options = ["Non affecté", "Exploitation", ...cropOptions(value)];
       return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option, value || "Non affecté")).join("")}</select></label>`;
     }
     if (typeName === "staffSelect") {
@@ -3456,7 +3462,8 @@ function updateFinanceSaleFields() {
     });
   });
   const saleChecked = form.elements.isSale && form.elements.isSale.type === "hidden" ? form.elements.isSale.value === "on" : Boolean(form.elements.isSale && form.elements.isSale.checked);
-  const hasCrop = form.elements.crop && form.elements.crop.value && form.elements.crop.value !== "Non affecté";
+  if (isExpense && form.elements.crop && (!form.elements.crop.value || form.elements.crop.value === "Non affecté")) form.elements.crop.value = "Exploitation";
+  const hasCrop = form.elements.crop && form.elements.crop.value && !["Non affecté", "Exploitation"].includes(form.elements.crop.value);
   const cropLabel = form.elements.crop ? form.elements.crop.closest("label") : null;
   if (cropLabel) {
     cropLabel.classList.toggle("sale-fields-hidden", isTransfer);
@@ -3594,6 +3601,7 @@ function handleFormSubmit(event) {
     data.account = data.account === "Banque" ? "Banque" : "Caisse";
     data.transferTo = data.type === "Virement interne" && canChooseFinanceAccount() ? data.transferTo || (data.account === "Caisse" ? "Banque" : "Caisse") : "";
     if (data.type === "Virement interne" && data.transferTo === data.account) data.transferTo = data.account === "Caisse" ? "Banque" : "Caisse";
+    if (data.type === "Dépense" && (!data.crop || data.crop === "Non affecté")) data.crop = "Exploitation";
     if (data.type === "Virement interne") {
       data.crop = "Non affecté";
       data.assignedTo = "";
@@ -3619,7 +3627,7 @@ function handleFormSubmit(event) {
       data.isCca = "";
       data.ccaOwner = "";
     }
-    const isSaleWithCrop = data.type === "Recette" && data.isSale && data.crop && data.crop !== "Non affecté";
+    const isSaleWithCrop = data.type === "Recette" && data.isSale && data.crop && !["Non affecté", "Exploitation"].includes(data.crop);
     if (!isSaleWithCrop) {
       data.saleQuantity = "";
       data.salePrice = "";
