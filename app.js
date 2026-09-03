@@ -1193,6 +1193,45 @@ async function saveRemoteMeta() {
   if (!response.ok) throw new Error(`Sauvegarde suivi Supabase impossible (${response.status})`);
 }
 
+async function saveRemoteRecord(collection, item) {
+  if (!supabaseEnabled() || !navigator.onLine || !item) return false;
+  if (remoteWriteInProgress) return false;
+  const table = supabaseConfig.tables[collection];
+  if (!table) return false;
+  remoteWriteInProgress = true;
+  try {
+    const response = await supabaseRequest(`${remoteTableUrl(table)}?on_conflict=id`, {
+      method: "POST",
+      headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify([recordToRemoteRow(collection, item)])
+    });
+    if (!response.ok) {
+      const columnError = await responseErrorText(response);
+      throw new Error(`Sauvegarde ${table} impossible. Vérifiez les colonnes Supabase : ${columnError}`);
+    }
+    await saveRemoteMeta();
+    return true;
+  } finally {
+    remoteWriteInProgress = false;
+  }
+}
+
+function saveRemoteRecordSoon(collection, item) {
+  if (!item) return;
+  window.setTimeout(() => {
+    if (remoteWriteInProgress) {
+      saveRemoteRecordSoon(collection, item);
+      return;
+    }
+    saveRemoteRecord(collection, item)
+      .then((saved) => {
+        if (saved && collection === "tasks") clearSyncedPendingTaskStatuses([item]);
+        if (saved) markRemoteSynced();
+      })
+      .catch((error) => setSyncStatus("error", error.message));
+  }, 0);
+}
+
 async function pushRemoteState() {
   if (!supabaseEnabled() || !navigator.onLine) return;
   if (remoteWriteInProgress) return;
@@ -1240,8 +1279,13 @@ function stopAutoSync() {
 async function syncFromSupabase() {
   if (!supabaseEnabled()) return;
   if (syncInProgress) return;
+  if (remoteWriteInProgress) return;
   if (!navigator.onLine) {
     setSyncStatus("offline", "Hors ligne : données conservées sur cet appareil");
+    return;
+  }
+  if (Object.keys(readPendingTaskStatuses()).length) {
+    await pushRemoteState();
     return;
   }
   syncInProgress = true;
@@ -2161,10 +2205,12 @@ function dedupeGeneratedBaseTasksForToday() {
 function toggleBaseTaskActive(templateId, active) {
   if (!canAccessSection("tasks:write")) return;
   let changed = false;
+  let changedTemplate = null;
   state.dailyTaskTemplates = (state.dailyTaskTemplates || []).map((template) => {
     if (template.id !== templateId) return template;
     changed = template.active !== active;
-    return touchRecord({ ...template, active });
+    changedTemplate = touchRecord({ ...template, active });
+    return changedTemplate;
   });
   if (!changed) {
     renderDailyTaskBase();
@@ -2172,6 +2218,7 @@ function toggleBaseTaskActive(templateId, active) {
   }
   if (active) ensureActiveBaseTasksForToday();
   saveState();
+  saveRemoteRecordSoon("dailyTaskTemplates", changedTemplate);
   render();
 }
 
@@ -3888,18 +3935,22 @@ function completeTask(id) {
 function setTaskCompletion(id, done) {
   if (!canAccessSection("tasks:write")) return;
   const timestamp = new Date().toISOString();
+  let changedTask = null;
   state.tasks = state.tasks.map((task) => {
     if (task.id !== id) return task;
     if (done) {
       const previousStatus = task.status && task.status !== "Terminé" ? task.status : task.previousStatus || "À faire";
       rememberPendingTaskStatus(id, "Terminé", timestamp);
-      return touchRecord({ ...task, previousStatus, status: "Terminé" }, timestamp);
+      changedTask = touchRecord({ ...task, previousStatus, status: "Terminé" }, timestamp);
+      return changedTask;
     }
     const restoredStatus = task.previousStatus && task.previousStatus !== "Terminé" ? task.previousStatus : "À faire";
     rememberPendingTaskStatus(id, restoredStatus, timestamp);
-    return touchRecord({ ...task, previousStatus: "", status: restoredStatus }, timestamp);
+    changedTask = touchRecord({ ...task, previousStatus: "", status: restoredStatus }, timestamp);
+    return changedTask;
   });
   saveState();
+  saveRemoteRecordSoon("tasks", changedTask);
   render();
 }
 
