@@ -338,7 +338,31 @@ td .text-button + .text-button { margin-left: 6px; }
 .finance-layout { grid-template-columns: 1fr; }
 .harvest-layout, .price-layout { grid-template-columns: 320px 1fr; }
 .finance-summary, .harvest-summary, .price-summary { display: grid; gap: 12px; margin-top: 14px; }
-.finance-by-crop { margin-top: 18px; }
+.finance-table-panel {
+  padding: 0;
+  overflow: hidden;
+}
+.finance-table-panel .panel-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcf8;
+}
+.finance-table-panel table {
+  min-width: 680px;
+  font-size: 0.9rem;
+}
+.finance-table-panel th {
+  padding: 11px 12px;
+  background: #f5f7f1;
+  border-bottom: 1px solid var(--line);
+}
+.finance-table-panel td {
+  padding: 11px 12px;
+  vertical-align: top;
+}
+.finance-table-panel tbody tr:last-child td { border-bottom: 0; }
+.finance-transactions table { min-width: 980px; }
+.finance-by-crop { margin-top: 0; }
 .summary-line { display: flex; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 8px; background: #f5f7f1; }
 .compact-summary-table {
   display: block;
@@ -616,6 +640,11 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
   #financeByCropTable td:nth-child(2)::before { content: "Recettes"; }
   #financeByCropTable td:nth-child(3)::before { content: "Dépenses"; }
   #financeByCropTable td:nth-child(4)::before { content: "Solde"; }
+  #ccaTable td:nth-child(1)::before { content: "Associé"; }
+  #ccaTable td:nth-child(2)::before { content: "Dépenses CCA"; }
+  #ccaTable td:nth-child(3)::before { content: "Apports"; }
+  #ccaTable td:nth-child(4)::before { content: "Total CCA"; }
+  #ccaTable td:nth-child(5)::before { content: "Nombre"; }
   #priceSalesTable td:nth-child(3)::before { content: "Vente"; }
   #priceSalesTable td:nth-child(4)::before { content: "Quantité"; }
   #priceSalesTable td:nth-child(5)::before { content: "Prix/kg"; }
@@ -631,6 +660,21 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--panel);
+  }
+  .finance-table-panel {
+    padding: 0;
+    overflow-x: auto;
+  }
+  .finance-table-panel .panel-head {
+    padding: 12px;
+  }
+  .finance-table-panel table {
+    min-width: 680px;
+    font-size: 0.82rem;
+  }
+  .finance-table-panel th,
+  .finance-table-panel td {
+    padding: 10px;
   }
   table { display: table; width: 100%; min-width: 680px; border-collapse: collapse; border-spacing: 0; font-size: 0.82rem; }
   thead { display: table-header-group; }
@@ -699,6 +743,7 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
     overflow: visible;
     border: 0;
     background: transparent;
+    padding: 0;
   }
   .finance-transactions table,
   .finance-transactions tbody,
