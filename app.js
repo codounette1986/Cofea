@@ -2,9 +2,11 @@ const stateKey = "agripilot-state-v1";
 const activeProfileKey = "agripilot-active-profile-v1";
 const authUserKey = "agripilot-auth-user-v1";
 const lastRemoteSyncKey = "agripilot-last-remote-sync-v1";
+const pendingTaskStatusKey = "agripilot-pending-task-status-v1";
 const weatherCacheKey = "agripilot-weather-forecast-v1";
 const weatherLocationCacheKey = "agripilot-weather-location-v1";
 const deletionRetentionDays = 30;
+const pendingTaskStatusWindowMs = 5 * 60 * 1000;
 
 const supabaseConfig = {
   url: "https://zulvxofvazgsllibodfp.supabase.co",
@@ -514,6 +516,61 @@ function mergeRecords(localRows = [], remoteRows = [], deletedRows = {}) {
   return Array.from(merged.values());
 }
 
+function readPendingTaskStatuses() {
+  try {
+    const pending = JSON.parse(localStorage.getItem(pendingTaskStatusKey) || "{}");
+    const now = Date.now();
+    return Object.fromEntries(Object.entries(collectionObject(pending)).filter(([, change]) => {
+      const time = new Date(change.updatedAt || 0).getTime();
+      return Number.isFinite(time) && now - time <= pendingTaskStatusWindowMs;
+    }));
+  } catch (error) {
+    return {};
+  }
+}
+
+function writePendingTaskStatuses(pending) {
+  localStorage.setItem(pendingTaskStatusKey, JSON.stringify(collectionObject(pending)));
+}
+
+function rememberPendingTaskStatus(id, status, updatedAt) {
+  const pending = readPendingTaskStatuses();
+  pending[id] = { status, updatedAt };
+  writePendingTaskStatuses(pending);
+}
+
+function clearSyncedPendingTaskStatuses(tasks = []) {
+  const pending = readPendingTaskStatuses();
+  let changed = false;
+  tasks.forEach((task) => {
+    if (!pending[task.id]) return;
+    if (task.status === pending[task.id].status && recordTime(task) >= new Date(pending[task.id].updatedAt || 0).getTime()) {
+      delete pending[task.id];
+      changed = true;
+    }
+  });
+  if (changed) writePendingTaskStatuses(pending);
+}
+
+function mergeTaskRecords(localRows = [], remoteRows = [], deletedRows = {}) {
+  const mergedRows = mergeRecords(localRows, remoteRows, deletedRows);
+  const pending = readPendingTaskStatuses();
+  if (!Object.keys(pending).length) return mergedRows;
+  const mergedById = new Map(mergedRows.map((task) => [task.id, task]));
+  localRows.forEach((localTask) => {
+    const pendingChange = pending[localTask.id];
+    if (!pendingChange || deletedRows[localTask.id]) return;
+    const mergedTask = mergedById.get(localTask.id);
+    if (!mergedTask || mergedTask.status === localTask.status) return;
+    mergedById.set(localTask.id, touchRecord({
+      ...mergedTask,
+      status: localTask.status,
+      previousStatus: localTask.previousStatus || mergedTask.previousStatus || ""
+    }, localTask.updatedAt || pendingChange.updatedAt || new Date().toISOString()));
+  });
+  return Array.from(mergedById.values());
+}
+
 function rememberDeletion(collection, id) {
   state.deletedRecords = normalizeDeletedRecords(state.deletedRecords);
   state.deletedRecords[collection][id] = new Date().toISOString();
@@ -961,11 +1018,12 @@ function mergeRemoteState(remoteData = {}) {
   state.deletedRecords = mergeDeletedRecords(state.deletedRecords, remoteState.deletedRecords);
   syncedCollections().forEach((collection) => {
     if (collection === "team" || collection === "userAccounts") return;
-    state[collection] = mergeRecords(
-      collectionForSync(collection, state),
-      collectionForSync(collection, remoteState),
-      collectionObject(state.deletedRecords[collection])
-    );
+    const localRows = collectionForSync(collection, state);
+    const remoteRows = collectionForSync(collection, remoteState);
+    const deletedRows = collectionObject(state.deletedRecords[collection]);
+    state[collection] = collection === "tasks"
+      ? mergeTaskRecords(localRows, remoteRows, deletedRows)
+      : mergeRecords(localRows, remoteRows, deletedRows);
   });
   const mergedAccounts = mergeRecords(
     mergeUserAccounts(state.userAccounts || [], state.team || []),
@@ -1098,7 +1156,9 @@ async function replaceRemoteCollection(collection) {
   }
 
   const remoteRowsAfterDeletes = remoteRows.filter((row) => !appliedDeletedRows[row.id]);
-  const mergedSource = mergeRecords(source, remoteRowsAfterDeletes, appliedDeletedRows);
+  const mergedSource = collection === "tasks"
+    ? mergeTaskRecords(source, remoteRowsAfterDeletes, appliedDeletedRows)
+    : mergeRecords(source, remoteRowsAfterDeletes, appliedDeletedRows);
   if (collection !== "userAccounts") state[collection] = mergedSource;
   if (collection === "team") {
     state.team = ensureAdminAccess(teamWithUserAccounts(mergedSource, userAccountsFromTeam(state.team || [])));
@@ -1116,6 +1176,7 @@ async function replaceRemoteCollection(collection) {
       const columnError = await responseErrorText(upsertResponse);
       throw new Error(`Sauvegarde ${table} impossible. Vérifiez les colonnes Supabase : ${columnError}`);
     }
+    if (collection === "tasks") clearSyncedPendingTaskStatuses(mergedSource);
   }
 }
 
@@ -1198,7 +1259,8 @@ async function syncFromSupabase() {
     const remoteData = remoteRow.data;
     const localTime = new Date(localUpdatedAt || 0).getTime();
     const remoteTime = new Date(remoteData.updatedAt || remoteRow.updated_at || 0).getTime();
-    const shouldPushAfterMerge = (Number.isFinite(localTime) && Number.isFinite(remoteTime) && localTime > remoteTime) || localHasPendingDeletes;
+    const hasPendingTaskStatus = Object.keys(readPendingTaskStatuses()).length > 0;
+    const shouldPushAfterMerge = (Number.isFinite(localTime) && Number.isFinite(remoteTime) && localTime > remoteTime) || localHasPendingDeletes || hasPendingTaskStatus;
     const localAccounts = userAccountsFromTeam(state.team || []);
     if (!hasUsableAccounts(remoteData.userAccounts) && hasUsableAccounts(localAccounts)) {
       state.userAccounts = localAccounts;
@@ -3825,14 +3887,17 @@ function completeTask(id) {
 
 function setTaskCompletion(id, done) {
   if (!canAccessSection("tasks:write")) return;
+  const timestamp = new Date().toISOString();
   state.tasks = state.tasks.map((task) => {
     if (task.id !== id) return task;
     if (done) {
       const previousStatus = task.status && task.status !== "Terminé" ? task.status : task.previousStatus || "À faire";
-      return touchRecord({ ...task, previousStatus, status: "Terminé" });
+      rememberPendingTaskStatus(id, "Terminé", timestamp);
+      return touchRecord({ ...task, previousStatus, status: "Terminé" }, timestamp);
     }
     const restoredStatus = task.previousStatus && task.previousStatus !== "Terminé" ? task.previousStatus : "À faire";
-    return touchRecord({ ...task, previousStatus: "", status: restoredStatus });
+    rememberPendingTaskStatus(id, restoredStatus, timestamp);
+    return touchRecord({ ...task, previousStatus: "", status: restoredStatus }, timestamp);
   });
   saveState();
   render();
