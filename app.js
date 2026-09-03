@@ -2414,7 +2414,7 @@ function renderFinance() {
     ["Sorties banque", money(totals.bankOut)],
     ["Avances en cours", money(openAdvances)]
   ];
-  document.querySelector("#financeSummary").innerHTML = financeSummaryRows.map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  document.querySelector("#financeSummary").innerHTML = summaryTable(financeSummaryRows);
   renderCashSummary(financeRecords);
   renderCcaSummary(validatedFinanceRecords, personalFinanceView);
   updateFinancePersonalLayout(personalFinanceView);
@@ -2522,7 +2522,7 @@ function renderCashSummary(records) {
   setPanelTitle("#financeUserBalancePanel", "Soldes utilisateurs");
   const totals = cashTotals(validated);
   const openAdvances = openAdvancesTotal(records);
-  cashPanel.innerHTML = [
+  const cashSummaryRows = [
     ["Solde caisse validé", money(totals.balance)],
     ["Solde banque validé", money(totals.bankBalance)],
     ["Trésorerie totale", money(totals.treasuryBalance)],
@@ -2537,7 +2537,8 @@ function renderCashSummary(records) {
     ["Sorties banque", money(totals.bankOut)],
     ["Avances en cours", money(openAdvances)],
     ["À valider", `${pendingCount} opération${pendingCount > 1 ? "s" : ""}`]
-  ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  ];
+  cashPanel.innerHTML = summaryTable(cashSummaryRows);
   const balances = userCashBalances(records);
   userPanel.innerHTML = balances.length ? balances.map((item) => `
     <div class="summary-line">
@@ -2553,7 +2554,7 @@ function renderUserCashSummary(cashPanel, userPanel, records, validated, pending
   const totals = cashTotals(validated);
   const accountability = userAccountabilityTotals(records);
   const pendingAmount = records.filter((record) => !isFinanceFinal(record)).reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  cashPanel.innerHTML = [
+  const userSummaryRows = [
     ["Recettes validées", money(totals.receipts)],
     ["Recettes à reverser", money(accountability.pendingReceipts)],
     ["Avances reçues validées", money(totals.advances)],
@@ -2561,12 +2562,32 @@ function renderUserCashSummary(cashPanel, userPanel, records, validated, pending
     ["Retours caisse validés", money(totals.returns)],
     ["Solde à justifier / rendre", money(accountability.balance)],
     ["Opérations en attente", `${pendingCount} (${money(pendingAmount)})`]
-  ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  ];
+  cashPanel.innerHTML = summaryTable(userSummaryRows);
   userPanel.innerHTML = [
     ["Recettes validées saisies", money(totals.receipts)],
     ["Avances moins dépenses", money(totals.advances - totals.expenses)],
     ["Solde après retours", money(accountability.balance)]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
+}
+
+function summaryTable(rows = []) {
+  const tableRows = [];
+  for (let index = 0; index < rows.length; index += 2) {
+    tableRows.push([rows[index], rows[index + 1]]);
+  }
+  return `
+    <table class="compact-summary-table">
+      <tbody>
+        ${tableRows.map(([first, second]) => `
+          <tr>
+            <td><span>${first[0]}</span><strong>${first[1]}</strong></td>
+            <td class="summary-extra">${second ? `<span>${second[0]}</span><strong>${second[1]}</strong>` : ""}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
 }
 
 function cashTotals(records = []) {
