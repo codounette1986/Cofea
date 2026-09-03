@@ -234,6 +234,7 @@ const accessSections = {
     { id: "finance:userFilter", label: "Filtre par utilisateur" },
     { id: "finance:allOperations", label: "Voir toutes les opérations" },
     { id: "finance:ownOperations", label: "Voir seulement ses opérations" },
+    { id: "finance:accounts", label: "Choisir Caisse / Banque" },
     { id: "finance:validate", label: "Validation caisse" },
     { id: "finance:write", label: "Ajout / modification" },
     { id: "finance:delete", label: "Suppression" }
@@ -358,8 +359,12 @@ const modalConfig = {
       ["label", "Libellé", "text"],
       ["crop", "Culture", "cropSelectOptional"],
       ["assignedTo", "Utilisateur assigné", "financeAssigneeSelect"],
-      ["type", "Type", "financeTypeSelect", ["Recette", "Dépense", "Avance utilisateur", "Retour caisse"]],
+      ["account", "Compte", "financeAccountSelect"],
+      ["transferTo", "Compte destinataire", "financeTransferSelect"],
+      ["type", "Type", "financeTypeSelect", ["Recette", "Dépense", "Avance utilisateur", "Retour caisse", "Apport CCA", "Virement interne"]],
       ["status", "Statut", "financeStatusSelect", ["Brouillon", "Soumis", "Validé", "Rejeté"]],
+      ["isCca", "Compte Courant Associé", "checkbox"],
+      ["ccaOwner", "Associé", "select", ["Codou", "Fatou"]],
       ["isSale", "C'est une vente", "checkbox"],
       ["amount", "Montant FCFA", "number"],
       ["saleQuantity", "Quantité vendue", "number"],
@@ -813,9 +818,13 @@ const remoteColumnMap = {
     label: "label",
     crop: "crop",
     assignedTo: "assigned_to",
+    account: "account",
+    transferTo: "transfer_to",
     type: "type",
     status: "status",
     amount: "amount",
+    isCca: "is_cca",
+    ccaOwner: "cca_owner",
     isSale: "is_sale",
     saleQuantity: "sale_quantity",
     salePrice: "sale_price",
@@ -866,11 +875,12 @@ function remoteRowToRecord(collection, row) {
   record.deletedAt = row.deleted_at || "";
   record.deletedBy = row.deleted_by || "";
   if (collection === "finance") record.isSale = row.is_sale ? "on" : "";
+  if (collection === "finance") record.isCca = row.is_cca ? "on" : "";
   return repairTextEncoding(record);
 }
 
 function normalizeRemoteValue(collection, appKey, value) {
-  if (collection === "finance" && appKey === "isSale") return Boolean(value);
+  if (collection === "finance" && ["isSale", "isCca"].includes(appKey)) return Boolean(value);
   if (remoteBooleanFields.has(appKey)) return Boolean(value);
   if (value === undefined || value === "") return null;
   if (remoteNumericFields.has(appKey)) return Number(value);
@@ -2002,7 +2012,13 @@ function renderDailyTaskBase() {
 
 function baseTaskGeneratedToday(template) {
   const today = currentDateValue();
-  return state.tasks.some((task) => task.due === today && (task.baseTaskId === template.id || task.title === template.title));
+  const generatedId = baseTaskRecordId(template, today);
+  return state.tasks.some((task) => !task.deletedAt && task.due === today && (task.id === generatedId || task.baseTaskId === template.id));
+}
+
+function baseTaskRecordId(template, date = currentDateValue()) {
+  const source = String(template.id || template.title || "base-task").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return `base-task-${source || "item"}-${date}`;
 }
 
 function taskInstruction(task) {
@@ -2037,10 +2053,11 @@ function repairTaskInstructionsFromTemplates() {
 function ensureActiveBaseTasksForToday() {
   const templates = state.dailyTaskTemplates || [];
   let created = false;
+  let cleaned = dedupeGeneratedBaseTasksForToday();
   templates.filter((template) => template.active === true).forEach((template) => {
     if (baseTaskGeneratedToday(template)) return;
     state.tasks.unshift(touchRecord({
-      id: createId(),
+      id: baseTaskRecordId(template),
       baseTaskId: template.id,
       title: template.title,
       field: template.crops && template.crops.length ? template.crops.join(", ") : "Toutes les cultures",
@@ -2051,10 +2068,32 @@ function ensureActiveBaseTasksForToday() {
     }));
     created = true;
   });
-  if (created) {
+  if (created || cleaned) {
     activeTaskFilter = "Tous";
     saveState();
   }
+}
+
+function dedupeGeneratedBaseTasksForToday() {
+  const today = currentDateValue();
+  const templatesById = new Map((state.dailyTaskTemplates || []).map((template) => [template.id, template]));
+  const seen = new Set();
+  let cleaned = false;
+  state.tasks = state.tasks.filter((task) => {
+    if (!task.baseTaskId || task.due !== today) return true;
+    const template = templatesById.get(task.baseTaskId);
+    const key = `${task.baseTaskId}|${task.due}`;
+    const canonicalId = template ? baseTaskRecordId(template, task.due) : "";
+    if (!seen.has(key)) {
+      seen.add(key);
+      return true;
+    }
+    cleaned = true;
+    rememberDeletion("tasks", task.id);
+    if (canonicalId && task.id !== canonicalId) rememberDeletion("tasks", task.id);
+    return false;
+  });
+  return cleaned;
 }
 
 function toggleBaseTaskActive(templateId, active) {
@@ -2205,8 +2244,8 @@ function exportRowsForView(view) {
   if (view === "finance") {
     const rows = financeRecordsForCurrentFilter()
       .filter((item) => dateInPeriod(item.date, "finance"))
-      .map((item) => [item.date, item.label, item.crop || "Non affecté", financeRecordUserLabel(item), item.type, financeStatus(item), Number(item.amount || 0), item.isSale ? "Oui" : "Non", item.saleQuantity || "", item.saleUnit || "", item.salePrice || ""]);
-    return { filename: `finance-${today}.csv`, headers: ["Date", "Libellé", "Culture", "Utilisateur", "Type", "Statut", "Montant", "Vente", "Quantité vendue", "Unité", "Prix unitaire"], rows };
+      .map((item) => [item.date, item.label, item.crop || "Non affecté", financeRecordUserLabel(item), financeAccount(item), item.transferTo || "", item.type, financeStatus(item), Number(item.amount || 0), isCcaMovement(item) ? "Oui" : "Non", item.ccaOwner || "", item.isSale ? "Oui" : "Non", item.saleQuantity || "", item.saleUnit || "", item.salePrice || ""]);
+    return { filename: `finance-${today}.csv`, headers: ["Date", "Libellé", "Culture", "Utilisateur", "Compte", "Vers", "Type", "Statut", "Montant", "CCA", "Associé CCA", "Vente", "Quantité vendue", "Unité", "Prix unitaire"], rows };
   }
   if (view === "prices") {
     const sales = salesWithPrice().filter((sale) => dateInPeriod(sale.date, "prices")).filter((sale) => activePriceCrop === "Toutes" || sale.crop === activePriceCrop);
@@ -2345,6 +2384,8 @@ function renderFinance() {
     label: (item) => item.label,
     crop: (item) => item.crop || "Non affecté",
     user: (item) => financeRecordUserLabel(item),
+    account: (item) => financeAccount(item),
+    transferTo: (item) => item.transferTo || "",
     type: (item) => item.type,
     status: (item) => financeStatus(item),
     amount: (item) => Number(item.amount)
@@ -2359,30 +2400,39 @@ function renderFinance() {
     ["Solde caisse", money(totals.balance)]
   ] : [
     ["Solde d'exploitation", money(totals.receipts - totals.expenses)],
+    ["Solde caisse", money(totals.balance)],
+    ["Solde banque", money(totals.bankBalance)],
+    ["Trésorerie totale", money(totals.treasuryBalance)],
     ["Entrées caisse", money(totals.cashIn)],
+    ["Entrées banque", money(totals.bankIn)],
+    ["Apports CCA", money(totals.ccaFunding)],
     ["Dépenses validées", money(totals.expenses)],
     ["Dépenses payées caisse", money(totals.cashExpenses)],
+    ["Dépenses payées banque", money(totals.bankExpenses)],
     ["Avances données", money(totals.advances)],
     ["Sorties caisse", money(totals.cashOut)],
-    ["Solde caisse", money(totals.balance)],
+    ["Sorties banque", money(totals.bankOut)],
     ["Avances en cours", money(openAdvances)]
   ];
   document.querySelector("#financeSummary").innerHTML = financeSummaryRows.map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
   renderCashSummary(financeRecords);
+  renderCcaSummary(validatedFinanceRecords, personalFinanceView);
   updateFinancePersonalLayout(personalFinanceView);
-  setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "user", "type", "status", "amount", null], renderFinance);
+  setupTableSort("finance", "#financeView .finance-transactions thead", ["date", "label", "crop", "user", "account", "transferTo", "type", "status", "amount", null], renderFinance);
   document.querySelector("#financeTable").innerHTML = sortedFinanceRecords.map((item) => `
     <tr>
       <td>${item.date}</td>
       <td>${item.label}</td>
       <td>${item.crop || "Non affecté"}</td>
       <td>${financeRecordUserLabel(item)}</td>
-      <td>${item.type}</td>
+      <td>${financeAccount(item)}</td>
+      <td>${item.transferTo || ""}</td>
+      <td>${item.type}${isCcaMovement(item) ? ` · CCA ${item.ccaOwner || "Non défini"}` : ""}</td>
       <td>${financeStatus(item)}</td>
       <td>${money(Number(item.amount))}</td>
       <td>${financeActionButtons(item)}</td>
     </tr>
-  `).join("") || `<tr><td colspan="8">Aucune opération sur cette période.</td></tr>`;
+  `).join("") || `<tr><td colspan="10">Aucune opération sur cette période.</td></tr>`;
   const financeByCropRows = sortRows(financeByCrop(validatedFinanceRecords), "financeByCrop", {
     crop: (item) => item.crop,
     revenue: (item) => item.revenue,
@@ -2398,6 +2448,37 @@ function renderFinance() {
       <td><strong>${money(item.revenue - item.expense)}</strong></td>
     </tr>
   `).join("") || `<tr><td colspan="4">Aucune recette ou dépense validée par culture sur cette période.</td></tr>`;
+}
+
+function renderCcaSummary(records, personalFinanceView) {
+  const panel = document.querySelector("#financeCcaPanel");
+  const table = document.querySelector("#ccaTable");
+  if (!panel || !table) return;
+  const showPanel = !personalFinanceView && currentProfile().role === "Admin";
+  panel.classList.toggle("access-hidden", !showPanel);
+  if (!showPanel) return;
+  const rows = ["Codou", "Fatou"].map((owner) => {
+    const expenseRecords = records.filter((record) => isCcaExpense(record) && record.ccaOwner === owner);
+    const fundingRecords = records.filter((record) => isCcaFunding(record) && record.ccaOwner === owner);
+    const expenses = expenseRecords.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+    const funding = fundingRecords.reduce((sum, record) => sum + Number(record.amount || 0), 0);
+    return {
+      owner,
+      expenses,
+      funding,
+      amount: expenses + funding,
+      count: expenseRecords.length + fundingRecords.length
+    };
+  });
+  table.innerHTML = rows.map((row) => `
+    <tr>
+      <td><strong>${row.owner}</strong></td>
+      <td>${money(row.expenses)}</td>
+      <td>${money(row.funding)}</td>
+      <td>${money(row.amount)}</td>
+      <td>${row.count}</td>
+    </tr>
+  `).join("");
 }
 
 function financeRecordsForCurrentAccess() {
@@ -2437,17 +2518,23 @@ function renderCashSummary(records) {
     renderUserCashSummary(cashPanel, userPanel, records, validated, pendingCount);
     return;
   }
-  setPanelTitle("#financeCashPanel", "Caisse");
+  setPanelTitle("#financeCashPanel", "Trésorerie");
   setPanelTitle("#financeUserBalancePanel", "Soldes utilisateurs");
   const totals = cashTotals(validated);
   const openAdvances = openAdvancesTotal(records);
   cashPanel.innerHTML = [
     ["Solde caisse validé", money(totals.balance)],
+    ["Solde banque validé", money(totals.bankBalance)],
+    ["Trésorerie totale", money(totals.treasuryBalance)],
     ["Entrées validées", money(totals.cashIn)],
+    ["Entrées banque", money(totals.bankIn)],
+    ["Apports CCA", money(totals.ccaFunding)],
     ["Dépenses validées", money(totals.expenses)],
     ["Dépenses payées caisse", money(totals.cashExpenses)],
+    ["Dépenses payées banque", money(totals.bankExpenses)],
     ["Avances données", money(totals.advances)],
     ["Sorties validées", money(totals.cashOut)],
+    ["Sorties banque", money(totals.bankOut)],
     ["Avances en cours", money(openAdvances)],
     ["À valider", `${pendingCount} opération${pendingCount > 1 ? "s" : ""}`]
   ].map(([label, value]) => `<div class="summary-line"><span>${label}</span><strong>${value}</strong></div>`).join("");
@@ -2485,25 +2572,68 @@ function renderUserCashSummary(cashPanel, userPanel, records, validated, pending
 function cashTotals(records = []) {
   const receipts = records.filter((record) => record.type === "Recette").reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const expenses = records.filter((record) => record.type === "Dépense").reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const cashExpenses = records
-    .filter((record) => record.type === "Dépense" && (!financeRecordAssignee(record) || isAdminFinanceAssignee(record)))
-    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const advances = records.filter((record) => record.type === "Avance utilisateur").reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const returns = records.filter((record) => record.type === "Retour caisse").reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const cashIn = receipts + returns;
-  const cashOut = cashExpenses + advances;
+  const ccaFunding = records.filter(isCcaFunding).reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const accountAmount = (type, account) => records
+    .filter((record) => record.type === type && financeAccount(record) === account)
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const directAccountExpenses = (account) => records
+    .filter((record) => record.type === "Dépense" && financeAccount(record) === account && !isCcaExpense(record) && (!financeRecordAssignee(record) || isAdminFinanceAssignee(record)))
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const accountCcaFunding = (account) => records
+    .filter((record) => isCcaFunding(record) && financeAccount(record) === account)
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const transferIn = (account) => records
+    .filter((record) => record.type === "Virement interne" && record.transferTo === account)
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const transferOut = (account) => records
+    .filter((record) => record.type === "Virement interne" && financeAccount(record) === account)
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const cashExpenses = directAccountExpenses("Caisse");
+  const bankExpenses = directAccountExpenses("Banque");
+  const cashAdvances = accountAmount("Avance utilisateur", "Caisse");
+  const bankAdvances = accountAmount("Avance utilisateur", "Banque");
+  const cashIn = accountAmount("Recette", "Caisse") + accountAmount("Retour caisse", "Caisse") + accountCcaFunding("Caisse") + transferIn("Caisse");
+  const bankIn = accountAmount("Recette", "Banque") + accountAmount("Retour caisse", "Banque") + accountCcaFunding("Banque") + transferIn("Banque");
+  const cashOut = cashExpenses + cashAdvances + transferOut("Caisse");
+  const bankOut = bankExpenses + bankAdvances + transferOut("Banque");
+  const balance = cashIn - cashOut;
+  const bankBalance = bankIn - bankOut;
   return {
     receipts,
     expenses,
     cashExpenses,
+    bankExpenses,
+    ccaFunding,
     advances,
     returns,
     cashIn,
+    bankIn,
     cashOut,
-    balance: cashIn - cashOut,
+    bankOut,
+    balance,
+    bankBalance,
+    treasuryBalance: balance + bankBalance,
     userBalance: advances - expenses - returns,
     openAdvances: Math.max(0, advances - expenses - returns)
   };
+}
+
+function financeAccount(record) {
+  return record && record.account === "Banque" ? "Banque" : "Caisse";
+}
+
+function isCcaExpense(record) {
+  return record.type === "Dépense" && Boolean(record.isCca);
+}
+
+function isCcaFunding(record) {
+  return ["Apport CCA", "Apport CCA caisse"].includes(record.type) && Boolean(record.isCca);
+}
+
+function isCcaMovement(record) {
+  return isCcaExpense(record) || isCcaFunding(record);
 }
 
 function openAdvancesTotal(records = []) {
@@ -2971,6 +3101,10 @@ function canValidateFinance() {
   return currentProfile().role === "Admin" || canAccessSection("finance:validate");
 }
 
+function canChooseFinanceAccount() {
+  return ["Admin", "Comptable"].includes(currentProfile().role) || canAccessSection("finance:accounts");
+}
+
 const modalWriteSections = {
   field: "fields:write",
   crop: "crops:write",
@@ -3061,6 +3195,7 @@ function applySectionAccess() {
     ["#financeSummary", "finance:summary"],
     ["#financeCashPanel", "finance:cash"],
     ["#financeUserBalancePanel", "finance:cash"],
+    ["#financeCcaPanel", "finance:summary"],
     ["#financePeriodFilters", "finance:operations"],
     ["#financeUserFilters", "finance:userFilter"],
     ["#financeTable", "finance:operations"],
@@ -3199,11 +3334,22 @@ function openModal(type, id = null) {
       const options = financeAssigneeOptions(selectedAssignee);
       return `<label>${label}<select name="${name}">${options.map((option) => optionTag(option.label, selectedAssignee, option.value)).join("")}</select></label>`;
     }
+    if (typeName === "financeAccountSelect") {
+      if (!canChooseFinanceAccount()) return `<input type="hidden" name="${name}" value="Caisse" />`;
+      const selectedAccount = value || "Caisse";
+      return `<label class="finance-account-field">${label}<select name="${name}" required>${["Caisse", "Banque"].map((option) => optionTag(option, selectedAccount)).join("")}</select></label>`;
+    }
+    if (typeName === "financeTransferSelect") {
+      if (!canChooseFinanceAccount()) return "";
+      const selectedTransfer = value || "";
+      return `<label class="finance-transfer-field">${label}<select name="${name}"><option value="">Choisir</option>${["Caisse", "Banque"].map((option) => optionTag(option, selectedTransfer)).join("")}</select></label>`;
+    }
     if (typeName === "financeStatusSelect") {
       const selectedStatus = value || (canValidateFinance() ? "Validé" : "Soumis");
       if (!canValidateFinance()) return `<input type="hidden" name="${name}" value="${escapeHtml(selectedStatus)}" />`;
       return `<label>${label}<select name="${name}" required>${options.map((option) => optionTag(option, selectedStatus)).join("")}</select></label>`;
     }
+    if (modalType === "finance" && ["isCca", "ccaOwner"].includes(name) && !canManageProfiles()) return "";
     if (typeName === "financeTypeSelect") {
       const allowedTypes = canValidateFinance() ? options : ["Recette", "Dépense", "Retour caisse"];
       const selectedType = allowedTypes.includes(value) ? value : allowedTypes[0];
@@ -3227,11 +3373,12 @@ function openModal(type, id = null) {
     }
     if (typeName === "checkbox") {
       const checked = name === "active" ? !record || record.active !== false : Boolean(value);
-      return `<label class="checkbox-field">${label}<input name="${name}" type="checkbox" ${checked ? "checked" : ""} /></label>`;
+      return `<label class="checkbox-field ${modalType === "finance" && name === "isCca" ? "cca-field" : ""}">${label}<input name="${name}" type="checkbox" ${checked ? "checked" : ""} /></label>`;
     }
     if (typeName === "select") {
       const saleFieldClass = name === "saleUnit" ? "sale-field" : "";
-      return `<label class="${saleFieldClass}">${label}<select name="${name}" ${name === "saleUnit" ? "" : "required"}>${options.map((option) => optionTag(option, value)).join("")}</select></label>`;
+      const ccaFieldClass = name === "ccaOwner" ? "cca-field" : "";
+      return `<label class="${saleFieldClass} ${ccaFieldClass}">${label}<select name="${name}" ${name === "saleUnit" || name === "ccaOwner" ? "" : "required"}>${options.map((option) => optionTag(option, value)).join("")}</select></label>`;
     }
     if (modalType === "field" && name === "area") {
       return `<label>${label}<input name="${name}" type="number" value="${safeValue}" min="0" max="3" step="0.01" required /><span class="field-hint">De 0 à 3 ha. Exemple : 300 m² = 0,03 ha.</span></label>`;
@@ -3244,7 +3391,7 @@ function openModal(type, id = null) {
       "beforeend",
       `<div class="unit-price-preview sale-field" id="unitPricePreview">Prix unitaire : à calculer</div>`
     );
-    bindFinanceSaleFields();
+    bindFinanceDynamicFields();
   }
   if (modalType === "profile") bindProfileAccessFields();
   document.querySelector("#recordModal").showModal();
@@ -3274,9 +3421,9 @@ function bindProfileAccessFields() {
   });
 }
 
-function bindFinanceSaleFields() {
+function bindFinanceDynamicFields() {
   const form = document.querySelector("#recordForm");
-  ["type", "crop", "isSale", "saleQuantity", "salePrice", "saleUnit", "saleKgEquivalent"].forEach((name) => {
+  ["type", "crop", "account", "transferTo", "isSale", "saleQuantity", "salePrice", "saleUnit", "saleKgEquivalent", "isCca", "ccaOwner"].forEach((name) => {
     const field = form.elements[name];
     if (field) field.addEventListener("input", updateFinanceSaleFields);
     if (field) field.addEventListener("change", updateFinanceSaleFields);
@@ -3286,10 +3433,41 @@ function bindFinanceSaleFields() {
 
 function updateFinanceSaleFields() {
   const form = document.querySelector("#recordForm");
-  const isSale = form.elements.type && form.elements.type.value === "Recette";
+  const operationType = form.elements.type ? form.elements.type.value : "";
+  const isSale = operationType === "Recette";
+  const isExpense = operationType === "Dépense";
+  const isCcaContribution = ["Apport CCA", "Apport CCA caisse"].includes(operationType);
+  const isTransfer = operationType === "Virement interne";
+  document.querySelectorAll(".finance-transfer-field").forEach((field) => {
+    field.classList.toggle("sale-fields-hidden", !isTransfer);
+    field.querySelectorAll("select").forEach((input) => {
+      input.disabled = !isTransfer;
+      const originAccount = financeAccount({ account: form.elements.account && form.elements.account.value });
+      if (isTransfer && (!input.value || input.value === originAccount)) input.value = originAccount === "Caisse" ? "Banque" : "Caisse";
+    });
+  });
+  const ccaChecked = Boolean(form.elements.isCca && form.elements.isCca.checked);
+  document.querySelectorAll(".cca-field").forEach((field) => {
+    const isOwnerField = Boolean(field.querySelector('[name="ccaOwner"]'));
+    const shouldShow = isCcaContribution || (isExpense && (!isOwnerField || ccaChecked));
+    field.classList.toggle("sale-fields-hidden", !shouldShow);
+    field.querySelectorAll("input, select").forEach((input) => {
+      input.disabled = !shouldShow;
+    });
+  });
   const saleChecked = form.elements.isSale && form.elements.isSale.type === "hidden" ? form.elements.isSale.value === "on" : Boolean(form.elements.isSale && form.elements.isSale.checked);
   const hasCrop = form.elements.crop && form.elements.crop.value && form.elements.crop.value !== "Non affecté";
-  const showSaleCheckbox = isSale && hasCrop;
+  const cropLabel = form.elements.crop ? form.elements.crop.closest("label") : null;
+  if (cropLabel) {
+    cropLabel.classList.toggle("sale-fields-hidden", isTransfer);
+    form.elements.crop.disabled = isTransfer;
+  }
+  const assigneeLabel = form.elements.assignedTo ? form.elements.assignedTo.closest("label") : null;
+  if (assigneeLabel) {
+    assigneeLabel.classList.toggle("sale-fields-hidden", isTransfer);
+    form.elements.assignedTo.disabled = isTransfer;
+  }
+  const showSaleCheckbox = isSale && hasCrop && !isTransfer;
   const saleCheckboxLabel = form.elements.isSale ? form.elements.isSale.closest("label") : null;
   if (saleCheckboxLabel) {
     saleCheckboxLabel.classList.toggle("sale-fields-hidden", !showSaleCheckbox);
@@ -3412,12 +3590,21 @@ function handleFormSubmit(event) {
   if (data.health) data.health = Number.parseInt(data.health, 10);
   if (modalType === "finance") {
     if (!canValidateFinance() && !["Recette", "Dépense", "Retour caisse"].includes(data.type)) data.type = "Dépense";
+    if (!canChooseFinanceAccount()) data.account = "Caisse";
+    data.account = data.account === "Banque" ? "Banque" : "Caisse";
+    data.transferTo = data.type === "Virement interne" && canChooseFinanceAccount() ? data.transferTo || (data.account === "Caisse" ? "Banque" : "Caisse") : "";
+    if (data.type === "Virement interne" && data.transferTo === data.account) data.transferTo = data.account === "Caisse" ? "Banque" : "Caisse";
+    if (data.type === "Virement interne") {
+      data.crop = "Non affecté";
+      data.assignedTo = "";
+    }
     if (!canManageProfiles()) {
       if (!editingRecord) data.assignedTo = (currentUser() && currentUser().id) || currentUserLabel();
       else delete data.assignedTo;
     } else {
       data.assignedTo = data.assignedTo || "";
     }
+    if (data.type === "Virement interne") data.assignedTo = "";
     if (!canValidateFinance()) {
       const existingRecord = editingRecord ? state.finance.find((item) => item.id === editingRecord.id) : null;
       data.status = existingRecord && existingRecord.status ? existingRecord.status : "Soumis";
@@ -3425,6 +3612,13 @@ function handleFormSubmit(event) {
       data.status = data.status || "Validé";
     }
     data.isSale = event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.type === "hidden" ? event.currentTarget.elements.isSale.value : event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.checked ? "on" : "";
+    data.isCca = canManageProfiles() && ((data.type === "Dépense" && event.currentTarget.elements.isCca && event.currentTarget.elements.isCca.checked) || ["Apport CCA", "Apport CCA caisse"].includes(data.type)) ? "on" : "";
+    data.ccaOwner = data.isCca ? data.ccaOwner || "Codou" : "";
+    if (data.type === "Virement interne") {
+      data.isSale = "";
+      data.isCca = "";
+      data.ccaOwner = "";
+    }
     const isSaleWithCrop = data.type === "Recette" && data.isSale && data.crop && data.crop !== "Non affecté";
     if (!isSaleWithCrop) {
       data.saleQuantity = "";

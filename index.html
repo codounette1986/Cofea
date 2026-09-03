@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=147" />
+    <link rel="manifest" href="./manifest.webmanifest?v=151" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=147" />
+    <link rel="stylesheet" href="./styles.css?v=151" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -231,6 +231,23 @@
               <h2>Soldes utilisateurs</h2>
               <div class="finance-summary" id="userCashBalances"></div>
             </div>
+            <div class="table-wrap panel" id="financeCcaPanel">
+              <div class="panel-head">
+                <h2>Compte Courant Associé</h2>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Associé</th>
+                    <th>Dépenses CCA</th>
+                    <th>Apports trésorerie</th>
+                    <th>Total CCA</th>
+                    <th>Nombre</th>
+                  </tr>
+                </thead>
+                <tbody id="ccaTable"></tbody>
+              </table>
+            </div>
             <div class="table-wrap panel finance-by-crop" id="financeByCropPanel">
               <div class="panel-head">
                 <h2>Recettes et dépenses par culture</h2>
@@ -255,6 +272,8 @@
                     <th>Libellé</th>
                     <th>Culture</th>
                     <th>Utilisateur</th>
+                    <th>Compte</th>
+                    <th>Vers</th>
                     <th>Type</th>
                     <th>Statut</th>
                     <th>Montant</th>
@@ -357,7 +376,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v147";
+        var refreshKey = "agripilot-cache-refresh-v151";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -376,7 +395,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=147");
+          window.location.replace("./start.html?v=151");
         });
       })();
     </script>
@@ -401,7 +420,7 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=147" defer></script>
+    <script src="./app.js?v=151" defer></script>
   </body>
 </html>
 

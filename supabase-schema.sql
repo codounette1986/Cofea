@@ -124,9 +124,13 @@ create table if not exists public.finance (
   label text,
   crop text,
   assigned_to text,
+  account text,
+  transfer_to text,
   type text,
   status text,
   amount numeric(14, 2),
+  is_cca boolean,
+  cca_owner text,
   is_sale boolean,
   sale_quantity numeric(12, 3),
   sale_price numeric(14, 2),
@@ -250,9 +254,13 @@ alter table public.finance add column if not exists date date;
 alter table public.finance add column if not exists label text;
 alter table public.finance add column if not exists crop text;
 alter table public.finance add column if not exists assigned_to text;
+alter table public.finance add column if not exists account text;
+alter table public.finance add column if not exists transfer_to text;
 alter table public.finance add column if not exists type text;
 alter table public.finance add column if not exists status text;
 alter table public.finance add column if not exists amount numeric(14, 2);
+alter table public.finance add column if not exists is_cca boolean;
+alter table public.finance add column if not exists cca_owner text;
 alter table public.finance add column if not exists is_sale boolean;
 alter table public.finance add column if not exists sale_quantity numeric(12, 3);
 alter table public.finance add column if not exists sale_price numeric(14, 2);
