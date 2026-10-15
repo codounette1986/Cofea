@@ -740,88 +740,36 @@ dialog::backdrop { background: rgba(16,24,19,0.45); }
     white-space: normal;
   }
   .finance-transactions.table-wrap {
-    overflow: visible;
-    border: 0;
-    background: transparent;
-    padding: 0;
-  }
-  .finance-transactions table,
-  .finance-transactions tbody,
-  .finance-transactions tr,
-  .finance-transactions td {
-    display: block;
-    width: 100%;
+    overflow-x: auto;
+    max-width: 100%;
     min-width: 0;
-  }
-  .finance-transactions thead { display: none; }
-  .finance-transactions tr {
-    position: relative;
-    margin-bottom: 12px;
-    padding: 12px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--panel);
-    box-shadow: var(--shadow);
-  }
-  .finance-transactions td {
-    display: grid;
-    grid-template-columns: 90px 1fr;
-    gap: 8px;
-    padding: 6px 0;
-    border: 0;
-    font-size: 0.86rem;
-  }
-  .finance-transactions td::before {
-    content: "Info";
-    color: var(--muted);
-    font-size: 0.72rem;
-    font-weight: 800;
-    text-transform: uppercase;
-  }
-  .finance-transactions #financeTable td:nth-child(1)::before { content: "Date"; }
-  .finance-transactions #financeTable td:nth-child(2)::before { content: "Libellé"; }
-  .finance-transactions #financeTable td:nth-child(3)::before { content: "Culture"; }
-  .finance-transactions #financeTable td:nth-child(4)::before { content: "Utilisateur"; }
-  .finance-transactions #financeTable td:nth-child(5)::before { content: "Compte"; }
-  .finance-transactions #financeTable td:nth-child(6)::before { content: "Vers"; }
-  .finance-transactions #financeTable td:nth-child(7)::before { content: "Type"; }
-  .finance-transactions #financeTable td:nth-child(8)::before { content: "Statut"; }
-  .finance-transactions #financeTable td:nth-child(9)::before { content: "Montant"; }
-  .finance-transactions #financeTable td:nth-child(10)::before { content: "Actions"; }
-  .finance-transactions #financeTable td:nth-child(2) {
-    display: block;
-    padding-right: 112px;
-    font-weight: 800;
-    color: var(--field);
-  }
-  .finance-transactions #financeTable td:nth-child(2)::before { display: none; }
-  .finance-transactions #financeTable td:nth-child(9) {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    display: block;
-    width: auto;
-    max-width: 112px;
     padding: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  .finance-transactions table {
+    display: table;
+    min-width: 980px;
+    font-size: 0.82rem;
+  }
+  .finance-transactions thead { display: table-header-group; }
+  .finance-transactions tbody { display: table-row-group; }
+  .finance-transactions tr { display: table-row; }
+  .finance-transactions th,
+  .finance-transactions td {
+    display: table-cell;
+    padding: 10px;
+    vertical-align: top;
+  }
+  .finance-transactions th { white-space: nowrap; }
+  .finance-transactions .sort-header {
+    min-height: 44px;
+    width: 100%;
+  }
+  .finance-transactions #financeTable td:nth-child(9) {
     text-align: right;
-    color: var(--field);
-    font-size: 0.95rem;
-    font-weight: 900;
-  }
-  .finance-transactions #financeTable td:nth-child(9)::before { display: none; }
-  .finance-transactions #financeTable td:nth-child(10) {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 8px;
-    padding-top: 10px;
-    border-top: 1px solid var(--line);
-  }
-  .finance-transactions #financeTable td:nth-child(10)::before { display: none; }
-  .finance-transactions #financeTable td:nth-child(10) .text-button {
-    flex: 1 1 120px;
-    justify-content: center;
-    margin: 0;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
   }
   td .text-button { display: inline-flex; width: auto; margin: 0; }
   td .text-button + .text-button { margin-left: 6px; }

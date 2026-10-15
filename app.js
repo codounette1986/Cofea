@@ -2884,6 +2884,7 @@ function canEditFinanceRecord(record) {
   if (!record) return canWriteModal("finance");
   if (currentProfile().role === "Admin") return canAccessSection("finance:write");
   if (!canAccessFinanceRecord(record) || !canAccessSection("finance:write")) return false;
+  if (currentProfile().role === "Comptable") return true;
   if (record.type === "Avance utilisateur") return false;
   return !isFinanceValidated(record);
 }
@@ -3488,6 +3489,7 @@ function openModal(type, id = null) {
     if (modalType === "finance" && ["isCca", "ccaOwner"].includes(name) && !canManageProfiles()) return "";
     if (typeName === "financeTypeSelect") {
       const allowedTypes = canValidateFinance() ? options : ["Recette", "Dépense", "Retour caisse"];
+      if (record && currentProfile().role === "Comptable" && value && !allowedTypes.includes(value)) allowedTypes.push(value);
       const selectedType = allowedTypes.includes(value) ? value : allowedTypes[0];
       return `<label>${label}<select name="${name}" required>${allowedTypes.map((option) => optionTag(option, selectedType)).join("")}</select></label>`;
     }
@@ -3726,7 +3728,10 @@ function handleFormSubmit(event) {
   }
   if (data.health) data.health = Number.parseInt(data.health, 10);
   if (modalType === "finance") {
-    if (!canValidateFinance() && !["Recette", "Dépense", "Retour caisse"].includes(data.type)) data.type = "Dépense";
+    const existingFinanceRecord = editingRecord ? state.finance.find((item) => item.id === editingRecord.id) : null;
+    if (!canValidateFinance() && !["Recette", "Dépense", "Retour caisse"].includes(data.type)) {
+      data.type = existingFinanceRecord && currentProfile().role === "Comptable" ? existingFinanceRecord.type : "Dépense";
+    }
     if (!canChooseFinanceAccount()) data.account = "Caisse";
     data.account = data.account === "Banque" ? "Banque" : "Caisse";
     data.transferTo = data.type === "Virement interne" && canChooseFinanceAccount() ? data.transferTo || (data.account === "Caisse" ? "Banque" : "Caisse") : "";
@@ -3752,6 +3757,10 @@ function handleFormSubmit(event) {
     data.isSale = event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.type === "hidden" ? event.currentTarget.elements.isSale.value : event.currentTarget.elements.isSale && event.currentTarget.elements.isSale.checked ? "on" : "";
     data.isCca = canManageProfiles() && ((data.type === "Dépense" && event.currentTarget.elements.isCca && event.currentTarget.elements.isCca.checked) || ["Apport CCA", "Apport CCA caisse"].includes(data.type)) ? "on" : "";
     data.ccaOwner = data.isCca ? data.ccaOwner || "Codou" : "";
+    if (!canManageProfiles() && existingFinanceRecord) {
+      data.isCca = existingFinanceRecord.isCca || "";
+      data.ccaOwner = existingFinanceRecord.ccaOwner || "";
+    }
     if (data.type === "Virement interne") {
       data.isSale = "";
       data.isCca = "";
