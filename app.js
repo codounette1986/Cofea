@@ -1409,6 +1409,7 @@ function bindEvents() {
     const closeDialogButton = event.target.closest("[data-close-dialog]");
     const passwordToggleButton = event.target.closest("[data-toggle-password]");
     const exportButton = event.target.closest("[data-export]");
+    const invoiceButton = event.target.closest("[data-sale-invoice]");
 
     if (event.target.closest(".daily-task-actions")) event.preventDefault();
     if (closeDialogButton) closeDialog(closeDialogButton.dataset.closeDialog);
@@ -1422,6 +1423,7 @@ function bindEvents() {
     if (toggleCropButton) toggleCrop(toggleCropButton.dataset.toggleCrop);
     if (periodResetButton) resetPeriodFilter(periodResetButton.dataset.periodReset);
     if (exportButton) exportView(exportButton.dataset.export);
+    if (invoiceButton) openSaleInvoice(invoiceButton.dataset.saleInvoice);
   });
   document.body.addEventListener("change", (event) => {
     const baseTaskCheckbox = event.target.closest("[data-base-task-check]");
@@ -2612,6 +2614,7 @@ function renderFinanceUserFilter() {
 
 function financeActionButtons(record) {
   return [
+    canInvoiceSale(record, "finance") ? saleInvoiceButton(record) : "",
     canEditFinanceRecord(record) ? `<button class="text-button" data-edit="${record.id}" data-type="finance">Modifier</button>` : "",
     canDeleteFinanceRecord(record) ? `<button class="text-button" data-delete="${record.id}" data-collection="finance">Supprimer</button>` : ""
   ].join("") || `<span class="muted">Verrouillé</span>`;
@@ -2923,7 +2926,7 @@ function renderPrices() {
   });
   document.querySelector("#priceSummary").innerHTML = priceSummary(filteredSales);
   document.querySelector("#priceChart").innerHTML = renderPriceChart(filteredSales);
-  setupTableSort("prices", "#pricesView .finance-by-crop thead", ["date", "crop", "amount", "quantity", "price"], renderPrices);
+  setupTableSort("prices", "#pricesView .finance-by-crop thead", ["date", "crop", "amount", "quantity", "price", null], renderPrices);
   document.querySelector("#priceSalesTable").innerHTML = filteredSales.map((sale) => `
     <tr>
       <td>${sale.date}</td>
@@ -2931,8 +2934,123 @@ function renderPrices() {
       <td>${money(Number(sale.amount))}</td>
       <td>${sale.saleQuantity} ${sale.saleUnit}</td>
       <td><strong>${money(sale.pricePerKg)} / kg</strong></td>
+      <td>${canInvoiceSale(sale, "prices") ? saleInvoiceButton(sale) : ""}</td>
     </tr>
-  `).join("") || `<tr><td colspan="5">Aucune vente avec quantité renseignée.</td></tr>`;
+  `).join("") || `<tr><td colspan="6">Aucune vente avec quantité renseignée.</td></tr>`;
+}
+
+function canInvoiceSale(sale, view = currentView) {
+  return sale.type === "Recette" && sale.isSale && Number(sale.saleQuantity) > 0
+    && Number.isFinite(Number(sale.amount)) && Number(sale.amount) > 0
+    && ((view === "finance" && canAccessView("finance") && canAccessSection("finance:operations") && canAccessFinanceRecord(sale))
+      || (view === "prices" && canAccessView("prices") && canAccessSection("prices:sales")));
+}
+
+function saleInvoiceButton(sale) {
+  return `<button class="text-button" type="button" data-sale-invoice="${escapeHtml(sale.id)}">Facture</button>`;
+}
+
+function openSaleInvoice(id) {
+  const sale = state.finance.find((record) => record.id === id);
+  if (!sale || !canInvoiceSale(sale)) return;
+  const dialog = document.createElement("dialog");
+  dialog.setAttribute("aria-label", "Facture de vente");
+  dialog.innerHTML = `<form class="modal-card">
+    <div class="modal-head"><h2>Facture de vente</h2></div>
+    <div class="form-grid">
+      <label>Vendeur<input name="seller" value="COFEA" maxlength="100" required /></label>
+      <label>Client<input name="customer" maxlength="100" required autofocus /></label>
+      <label>Référence<input name="reference" maxlength="70" required /></label>
+      <label>Adresse ou contact du client<input name="contact" maxlength="120" /></label>
+    </div>
+    <div class="modal-actions">
+      <button type="button" data-invoice-close>Annuler</button>
+      <button type="submit" class="primary-button">Télécharger le PDF</button>
+    </div>
+  </form>`;
+  const form = dialog.querySelector("form");
+  form.elements.reference.value = `FAC-${sale.id}`.slice(0, 70);
+  dialog.querySelector("[data-invoice-close]").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!canInvoiceSale(sale)) return dialog.close();
+    const details = Object.fromEntries(Array.from(new FormData(form), ([key, value]) => [key, value.trim()]));
+    for (const name of ["seller", "customer", "reference"]) {
+      if (details[name]) continue;
+      form.elements[name].value = "";
+      form.elements[name].reportValidity();
+      return;
+    }
+    const blob = new Blob([buildSaleInvoicePdf(sale, details)], { type: "application/pdf" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `facture-${details.reference.replace(/[^a-z0-9_-]/gi, "_")}.pdf`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    dialog.close();
+  });
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
+function buildSaleInvoicePdf(sale, details) {
+  const escapePdf = (value) => Array.from(String(value).normalize("NFC"), (char) => {
+    if (char === "\u202f" || char === "\u00a0") return " ";
+    if (char === "œ" || char === "Œ") return char === "œ" ? "oe" : "OE";
+    const byte = char.charCodeAt(0);
+    if (byte < 32) return " ";
+    if (byte > 255) return "?";
+    return /[()\\]/.test(char) || byte > 126 ? "\\" + byte.toString(8).padStart(3, "0") : char;
+  }).join("");
+  const content = [];
+  const line = (value, x, y, size = 11) => {
+    content.push(`BT /F1 ${size} Tf 1 0 0 1 ${x} ${y} Tm (${escapePdf(value)}) Tj ET\n`);
+  };
+  const block = (value, y, width = 72) => {
+    const text = Array.from(String(value).replace(/\s+/g, " ").trim());
+    for (let i = 0; i < text.length; i += width) line(text.slice(i, i + width).join(""), 48, y - i / width * 15);
+  };
+  const amount = Number(sale.amount);
+  const quantity = Number(sale.saleQuantity);
+  const formatAmount = (value) => `${value.toLocaleString("fr-SN", { maximumFractionDigits: 2 })} FCFA`;
+  content.push("0.16 0.32 0.22 rg\n");
+  line("FACTURE", 48, 770, 28);
+  content.push("0 g\n");
+  block(`Référence : ${details.reference}`, 733);
+  line(`Date de vente : ${sale.date || ""}`, 48, 688);
+  block(`Vendeur : ${details.seller}`, 654);
+  block(`Client : ${details.customer}`, 608);
+  if (details.contact) block(`Contact : ${details.contact}`, 570);
+  content.push("0.93 0.95 0.93 rg 48 488 499 30 re f 0 g\n");
+  line("Désignation", 56, 499);
+  line("Quantité", 280, 499);
+  line("Prix unitaire", 385, 499);
+  block(String(sale.label || sale.crop || "Vente").slice(0, 180), 466, 32);
+  line(`${quantity} ${String(sale.saleUnit || "").slice(0, 8)}`, 280, 466);
+  line(formatAmount(Number(sale.salePrice) || amount / quantity), 385, 466);
+  content.push("0.16 0.32 0.22 RG 48 356 m 547 356 l S\n");
+  line(`Total : ${formatAmount(amount)}`, 280, 328, 14);
+
+  // PDF offsets are byte offsets; the stream uses only ASCII and octal escapes.
+  const stream = content.join("");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}endstream`
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = objects.map((object, index) => {
+    const offset = pdf.length;
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    return `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  return pdf + `xref\n0 6\n0000000000 65535 f \n${offsets.join("")}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${pdf.length}\n%%EOF\n`;
 }
 
 function renderTeam() {
