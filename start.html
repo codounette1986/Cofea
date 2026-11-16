@@ -8,9 +8,9 @@
       name="description"
       content="PWA de gestion et management d'une exploitation agricole."
     />
-    <link rel="manifest" href="./manifest.webmanifest?v=161" />
+    <link rel="manifest" href="./manifest.webmanifest?v=162" />
     <link rel="icon" href="./icons/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=161" />
+    <link rel="stylesheet" href="./styles.css?v=162" />
     <title>AgriPilot - Gestion agricole</title>
   </head>
   <body>
@@ -216,7 +216,13 @@
             <h2>Finances</h2>
             <div class="section-actions"><button class="text-button" data-export="finance">Exporter Excel</button><button class="primary-button" data-modal="finance">Ajouter une opération</button></div>
           </div>
-          <div class="period-filter" id="financePeriodFilters"><label>Du<input type="date" data-period-key="finance" data-period-bound="from" /></label><label>Au<input type="date" data-period-key="finance" data-period-bound="to" /></label><button class="text-button" data-period-reset="finance">Réinitialiser</button></div>
+          <div class="period-filter" id="financePeriodFilters">
+            <label>Du<input type="date" data-period-key="finance" data-period-bound="from" /></label>
+            <label>Au<input type="date" data-period-key="finance" data-period-bound="to" /></label>
+            <label>Type<select data-finance-filter="type"><option value="">Tous les types</option><option>Recette</option><option>Dépense</option><option>Avance utilisateur</option><option>Retour caisse</option><option>Apport CCA</option><option>Virement interne</option></select></label>
+            <label>Statut<select data-finance-filter="status"><option value="">Tous les statuts</option><option>Brouillon</option><option>Soumis</option><option>Validé</option><option>Rejeté</option></select></label>
+            <button class="text-button" data-period-reset="finance">Réinitialiser</button>
+          </div>
           <div class="period-filter finance-user-filter" id="financeUserFilters"><label>Utilisateur<select id="financeUserFilter"></select></label></div>
           <div class="finance-layout">
             <div class="panel" id="financeMainSummaryPanel">
@@ -377,7 +383,7 @@
 
     <script>
       (function refreshStalePwaCache() {
-        var refreshKey = "agripilot-cache-refresh-v161";
+        var refreshKey = "agripilot-cache-refresh-v162";
         if (localStorage.getItem(refreshKey) || !navigator.onLine) return;
         if (!("serviceWorker" in navigator) && !("caches" in window)) return;
         localStorage.setItem(refreshKey, "done");
@@ -396,7 +402,7 @@
             })
           : Promise.resolve();
         Promise.all([unregisterWorkers, clearCaches]).finally(function () {
-          window.location.replace("./start.html?v=161");
+          window.location.replace("./start.html?v=162");
         });
       })();
     </script>
@@ -421,7 +427,7 @@
         }
       }, true);
     </script>
-    <script src="./app.js?v=161" defer></script>
+    <script src="./app.js?v=162" defer></script>
   </body>
 </html>
 

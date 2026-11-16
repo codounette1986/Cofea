@@ -98,6 +98,7 @@ let currentView = "dashboard";
 let activeTaskFilter = "Tous";
 let activePriceCrop = "Toutes";
 let activeFinanceUserFilter = "Tous";
+const financeTransactionFilters = { type: "", status: "" };
 let periodFilters = {
   tasks: { from: "", to: "" },
   harvests: { from: "", to: "" },
@@ -1440,9 +1441,10 @@ function bindEvents() {
   document.body.addEventListener("change", handlePeriodInput);
 
   document.body.addEventListener("change", (event) => {
-    const financeUserSelect = event.target.closest("#financeUserFilter");
-    if (!financeUserSelect) return;
-    activeFinanceUserFilter = financeUserSelect.value || "Tous";
+    const select = event.target.closest("#financeUserFilter, [data-finance-filter]");
+    if (!select) return;
+    if (select.id === "financeUserFilter") activeFinanceUserFilter = select.value || "Tous";
+    else financeTransactionFilters[select.dataset.financeFilter] = select.value;
     renderFinance();
     applySectionAccess();
   });
@@ -2295,7 +2297,13 @@ function updatePeriodFilter(key, bound, value) {
 function resetPeriodFilter(key) {
   if (!periodFilters[key]) return;
   periodFilters[key] = { from: "", to: "" };
-  if (key === "finance") activeFinanceUserFilter = "Tous";
+  if (key === "finance") {
+    activeFinanceUserFilter = "Tous";
+    document.querySelectorAll("[data-finance-filter]").forEach((select) => {
+      financeTransactionFilters[select.dataset.financeFilter] = "";
+      select.value = "";
+    });
+  }
   document.querySelectorAll(`[data-period-key="${key}"]`).forEach((input) => { input.value = ""; });
   renderPeriodView(key);
 }
@@ -2355,6 +2363,7 @@ function exportRowsForView(view) {
   if (view === "finance") {
     const rows = financeRecordsForCurrentFilter()
       .filter((item) => dateInPeriod(item.date, "finance"))
+      .filter(matchesFinanceTransactionFilters)
       .map((item) => [item.date, item.label, financeCropLabel(item), financeRecordUserLabel(item), financeAccount(item), item.transferTo || "", item.type, financeStatus(item), Number(item.amount || 0), isCcaMovement(item) ? "Oui" : "Non", item.ccaOwner || "", item.isSale ? "Oui" : "Non", item.saleQuantity || "", item.saleUnit || "", item.salePrice || ""]);
     return { filename: `finance-${today}.csv`, headers: ["Date", "Libellé", "Culture", "Utilisateur", "Compte", "Vers", "Type", "Statut", "Montant", "CCA", "Associé CCA", "Vente", "Quantité vendue", "Unité", "Prix unitaire"], rows };
   }
@@ -2490,7 +2499,7 @@ function renderClients() {
 function renderFinance() {
   renderFinanceUserFilter();
   const financeRecords = financeRecordsForCurrentFilter().filter((item) => dateInPeriod(item.date, "finance"));
-  const sortedFinanceRecords = sortRows(financeRecords, "finance", {
+  const sortedFinanceRecords = sortRows(financeRecords.filter(matchesFinanceTransactionFilters), "finance", {
     date: (item) => item.date,
     label: (item) => item.label,
     crop: (item) => financeCropLabel(item),
@@ -2595,6 +2604,12 @@ function renderCcaSummary(records, personalFinanceView) {
 function financeRecordsForCurrentAccess() {
   if (canSeeAllFinanceOperations()) return state.finance;
   return state.finance.filter(recordBelongsToCurrentUser);
+}
+
+function matchesFinanceTransactionFilters(record) {
+  const { type, status } = financeTransactionFilters;
+  const recordType = record.type === "Apport CCA caisse" ? "Apport CCA" : record.type;
+  return (!type || recordType === type) && (!status || financeStatus(record) === status);
 }
 
 function financeRecordsForCurrentFilter() {
