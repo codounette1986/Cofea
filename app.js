@@ -3013,6 +3013,7 @@ function buildSaleInvoicePdf(sale, details) {
   const block = (value, y, width = 72) => {
     const text = Array.from(String(value).replace(/\s+/g, " ").trim());
     for (let i = 0; i < text.length; i += width) line(text.slice(i, i + width).join(""), 48, y - i / width * 15);
+    return y - Math.ceil(text.length / width) * 15;
   };
   const amount = Number(sale.amount);
   const quantity = Number(sale.saleQuantity);
@@ -3020,20 +3021,22 @@ function buildSaleInvoicePdf(sale, details) {
   content.push("0.16 0.32 0.22 rg\n");
   line("FACTURE", 48, 770, 28);
   content.push("0 g\n");
-  block(`Référence : ${details.reference}`, 733);
-  line(`Date de vente : ${sale.date || ""}`, 48, 688);
-  block(`Vendeur : ${details.seller}`, 654);
-  block(`Client : ${details.customer}`, 608);
-  if (details.contact) block(`Contact : ${details.contact}`, 570);
-  content.push("0.93 0.95 0.93 rg 48 488 499 30 re f 0 g\n");
-  line("Désignation", 56, 499);
-  line("Quantité", 280, 499);
-  line("Prix unitaire", 385, 499);
-  block(String(sale.label || sale.crop || "Vente").slice(0, 180), 466, 32);
-  line(`${quantity} ${String(sale.saleUnit || "").slice(0, 8)}`, 280, 466);
-  line(formatAmount(Number(sale.salePrice) || amount / quantity), 385, 466);
-  content.push("0.16 0.32 0.22 RG 48 356 m 547 356 l S\n");
-  line(`Total : ${formatAmount(amount)}`, 280, 328, 14);
+  let y = block(`Référence : ${details.reference}`, 742);
+  y = block(`Date de vente : ${sale.date || ""}`, y);
+  y = block(`Vendeur : ${details.seller}`, y);
+  y = block(`Client : ${details.customer}`, y);
+  if (details.contact) y = block(`Contact : ${details.contact}`, y);
+  const tableY = y - 22;
+  content.push(`0.93 0.95 0.93 rg 48 ${tableY} 499 26 re f 0 g\n`);
+  line("Désignation", 56, tableY + 9);
+  line("Quantité", 280, tableY + 9);
+  line("Prix unitaire", 385, tableY + 9);
+  const itemY = tableY - 19;
+  const totalRuleY = block(String(sale.label || sale.crop || "Vente").slice(0, 180), itemY, 32) - 9;
+  line(`${quantity} ${String(sale.saleUnit || "").slice(0, 8)}`, 280, itemY);
+  line(formatAmount(Number(sale.salePrice) || amount / quantity), 385, itemY);
+  content.push(`0.16 0.32 0.22 RG 48 ${totalRuleY} m 547 ${totalRuleY} l S\n`);
+  line(`Total : ${formatAmount(amount)}`, 280, totalRuleY - 23, 14);
 
   // PDF offsets are byte offsets; the stream uses only ASCII and octal escapes.
   const stream = content.join("");
